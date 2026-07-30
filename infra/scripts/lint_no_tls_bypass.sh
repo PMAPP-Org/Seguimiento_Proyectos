@@ -23,19 +23,25 @@
 # se crea en el Paso 10) es un PASS, no un fallo — igual que "0 archivos que
 # lintar no es un fallo" en el resto del pipeline de este paso.
 #
-# Convención de módulo TrustStore permitido (decisión delegada de este paso,
-# documentada aquí porque el brief la deja abierta hasta que el módulo real
-# se cree en el Paso 16): se considera "TrustStore auditado" cualquier ruta
-# que tenga un segmento de directorio `trust_store` o un archivo llamado
-# literalmente `trust_store.dart` (insensible a mayúsculas/minúsculas, para
-# tolerar variaciones como `TrustStore/` o `trust_store_io.dart`).
+# Convención de módulo TrustStore permitido: doc de plan (Paso 16, tarea 1,
+# plans/visitacampo-construccion.md línea 612) fija la ruta canónica exacta:
+# "Crear el módulo app/lib/core/security/trust_store.dart — único módulo
+# exento del lint anti-badCertificateCallback de Paso 3". El allow-list está
+# anclado (con `^`) a ese prefijo exacto desde la raíz del repo, no a un
+# nombre de segmento que pueda repetirse en cualquier profundidad del árbol
+# (una ruta como `app/lib/features/auth/trust_store/x.dart` NO cuenta como
+# TrustStore auditado: no cuelga de `core/security/`, así que sigue
+# prohibida). Insensible a mayúsculas/minúsculas solo en el propio segmento
+# `trust_store`/`TrustStore`, para tolerar variaciones de casing del nombre
+# del módulo si Paso 16 lo divide en varios archivos dentro de un directorio.
 # Ejemplos PERMITIDOS:
-#   app/lib/core/trust_store/trust_store.dart
-#   app/lib/core/trust_store/http_client_factory.dart
-#   app/lib/core/trust_store.dart
-# Ejemplos PROHIBIDOS (fuera de TrustStore):
+#   app/lib/core/security/trust_store.dart
+#   app/lib/core/security/trust_store/http_client_factory.dart
+# Ejemplos PROHIBIDOS (fuera del prefijo canónico, aunque el segmento se
+# llame igual):
 #   app/lib/sync/http_client.dart
 #   app/lib/features/auth/login_service.dart
+#   app/lib/features/auth/trust_store/sneaky.dart   <- decoy, NO es el módulo
 #
 # Uso:
 #   infra/scripts/lint_no_tls_bypass.sh [directorio...]
@@ -58,8 +64,15 @@ fi
 # Patrones prohibidos (RD-01/ADR-009), insensible a mayúsculas.
 FORBIDDEN_PATTERN='badCertificateCallback|allowBadCertificates|ignoreSslErrors|ignoreCertificateErrors'
 
-# Ruta permitida: módulo TrustStore auditado (Paso 16).
-ALLOWLIST_PATTERN='(^|/)[Tt][Rr][Uu][Ss][Tt]_?[Ss][Tt][Oo][Rr][Ee]([/.]|$)'
+# Ruta permitida: módulo TrustStore auditado (Paso 16), anclada al prefijo
+# canónico exacto app/lib/core/security/trust_store — NO un nombre de
+# segmento que pueda coincidir en cualquier parte del árbol (eso era el
+# hallazgo de revisión: un directorio decoy `.../trust_store/` fuera de
+# `core/security/` quedaba permitido). `^` ancla al inicio de la ruta
+# relativa al repo; solo se permite el archivo `trust_store.dart` o
+# cualquier ruta bajo el directorio `trust_store/` inmediatamente dentro de
+# `app/lib/core/security/`.
+ALLOWLIST_PATTERN='^app/lib/core/security/[Tt][Rr][Uu][Ss][Tt]_?[Ss][Tt][Oo][Rr][Ee](\.dart$|/)'
 
 violations_found=0
 dart_files_scanned=0
@@ -91,8 +104,11 @@ if [ "$violations_found" -eq 1 ]; then
 	echo "auditado (Paso 16)." >&2
 	echo "" >&2
 	echo "Prohibido: badCertificateCallback / allowBadCertificates /" >&2
-	echo "ignoreSslErrors (o equivalentes) fuera de una ruta con segmento" >&2
-	echo "'trust_store' o archivo 'trust_store.dart'. El único mecanismo de" >&2
+	echo "ignoreSslErrors (o equivalentes) fuera de" >&2
+	echo "app/lib/core/security/trust_store.dart (o app/lib/core/security/" >&2
+	echo "trust_store/**), el único módulo TrustStore auditado. Un directorio" >&2
+	echo "u archivo llamado 'trust_store' en cualquier otra ruta NO cuenta" >&2
+	echo "como excepción. El único mecanismo de" >&2
 	echo "confianza permitido para hosts self-hosted es el pinning de SPKI con" >&2
 	echo "consentimiento explícito del usuario, implementado dentro de ese" >&2
 	echo "módulo (ADR-009)." >&2
