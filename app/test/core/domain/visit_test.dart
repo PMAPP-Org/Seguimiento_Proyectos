@@ -45,5 +45,34 @@ void main() {
 
       expect(() => Visit.fromJson(incomplete), throwsA(isA<TypeError>()));
     });
+
+    test(
+      'fromJson entiende snake_case real del contrato (app/build.yaml: '
+      'field_rename: snake) — regresión: un roundtrip contra sí mismo no '
+      'detecta un desajuste consistente en ambas direcciones',
+      () {
+        final visit = Visit.fromJson({
+          'id': 'a1a1a1a1-0000-0000-0000-000000000000',
+          'org_id': 'b2b2b2b2-0000-0000-0000-000000000000',
+          'version': 1,
+          'change_seq': 42,
+          'deleted_at': null,
+          'template_version_id': 'c3c3c3c3-0000-0000-0000-000000000000',
+          'answers': {'altura_cm': 12},
+          'lat': 4.6,
+          'lon': null,
+          'accuracy_m': null,
+          'altitude_m': null,
+          'captured_at': capturedAt.toIso8601String(),
+          'device_id': 'd4d4d4d4-0000-0000-0000-000000000000',
+          'created_by': 'e5e5e5e5-0000-0000-0000-000000000000',
+        });
+
+        expect(visit.orgId, 'b2b2b2b2-0000-0000-0000-000000000000');
+        expect(visit.changeSeq, 42);
+        expect(visit.templateVersionId, 'c3c3c3c3-0000-0000-0000-000000000000');
+        expect(visit.toJson(), containsPair('org_id', 'b2b2b2b2-0000-0000-0000-000000000000'));
+      },
+    );
   });
 }

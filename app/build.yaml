@@ -1,0 +1,17 @@
+# Config de build_runner del proyecto. Hallazgo del Paso 12: sin esta
+# opción, `json_serializable` espera que las claves JSON coincidan
+# exactamente con los nombres de campo Dart (camelCase) — pero todo el
+# contrato del servidor (`server/openapi/v1.yaml`, Pydantic) usa
+# snake_case. `Visit.fromJson`/`.toJson` (Paso 10) tenían este mismo bug
+# latente sin detectar: el test de roundtrip solo se probaba contra sí
+# mismo (`Visit.fromJson(visit.toJson())`), así que un desajuste
+# consistente en ambas direcciones no lo revelaba. `field_rename: snake`
+# lo corrige para todos los modelos del proyecto de una vez, presente y
+# futuro, en vez de anotar cada clase individualmente y arriesgarse a que
+# alguna se quede sin la anotación.
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          field_rename: snake

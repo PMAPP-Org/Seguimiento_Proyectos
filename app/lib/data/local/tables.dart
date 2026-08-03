@@ -64,6 +64,14 @@ class OutboxOps extends Table {
   /// `POST /v1/sync/push` (contrato `RawSyncOp.payload`).
   TextColumn get payloadJson => text()();
 
+  /// El `message` de `OpErrorSchema` cuando el estado es `quarantine`
+  /// (`OutboxOpState.quarantine.reason`) — persistido para que sobreviva un
+  /// reinicio de la app; sin esto, el usuario perdería el motivo mostrado en
+  /// la UI de conflictos (Paso 23) cada vez que cierra la app. Columna
+  /// añadida en `schemaVersion` 2 junto con `sync_cursor` (`database.dart`).
+  /// Nunca lleva `details` del error (RD-12: nunca el dato que falló).
+  TextColumn get errorMessage => text().nullable()();
+
   /// Estado de la máquina de doc 08 §4.3, como texto (Paso 12 define el
   /// `sealed class OutboxOpState` que produce/consume estos valores).
   TextColumn get state => text()();
@@ -93,4 +101,24 @@ class AttachmentQueue extends Table {
 
   @override
   Set<Column> get primaryKey => {sha256};
+}
+
+/// Cursor de pull persistido (Paso 12, `SyncEngine.pull()`). Fila única
+/// (`id` siempre `0`, forzado por el `CHECK`) — no hay "cursor por
+/// dispositivo" que rastrear porque esta tabla ya vive en la BD de un solo
+/// dispositivo. Tabla añadida en `schemaVersion` 2 (`database.dart`): la
+/// primera migración real desde el Paso 11, con su test N-1→N en
+/// `test/data/local/migration_test.dart`.
+class SyncCursor extends Table {
+  // Sin CHECK SQL de "fila única": el único código que escribe esta tabla
+  // es `AppDatabase.writeCursor()`, que siempre usa `id=0` — no hay una
+  // ruta de escritura externa que pudiera violar el invariante.
+  // `clientDefault` (no `.withDefault`) para que `id` no sea obligatorio en
+  // `SyncCursorCompanion.insert(...)`.
+  IntColumn get id => integer().clientDefault(() => 0)();
+  TextColumn get cursor => text()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }

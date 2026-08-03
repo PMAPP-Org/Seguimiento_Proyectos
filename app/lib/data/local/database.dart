@@ -19,7 +19,7 @@ part 'database.g.dart';
 /// integración. Cualquier repositorio que necesite la BD recibe esta misma
 /// instancia (inyectada vía Riverpod desde el Paso 22 en adelante) — nunca
 /// construye la suya propia.
-@DriftDatabase(tables: [Visits, OutboxOps, AttachmentQueue])
+@DriftDatabase(tables: [Visits, OutboxOps, AttachmentQueue, SyncCursor])
 class AppDatabase extends _$AppDatabase {
   AppDatabase._(super.executor);
 
@@ -51,18 +51,38 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.forTesting(QueryExecutor executor) => AppDatabase._(executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
-    // Regla operativa (Paso 11, doc 08 ADR-002): ninguna migración
-    // destructiva se permite sin un test de upgrade desde la versión N-1
-    // con datos de ejemplo. `schemaVersion` sigue en 1 — todavía no hay un
-    // N-1 real que migrar; cuando lo haya, el `onUpgrade` correspondiente
-    // vive aquí y su test hermano en `test/data/local/migration_test.dart`,
-    // escrito ANTES de fusionar el cambio de esquema, no después.
+    // v1 → v2 (Paso 12): añade `sync_cursor` y `outbox_op.error_message`.
+    // Aditiva, no destructiva — ninguna columna existente cambia de tipo ni
+    // se elimina, así que los datos de un usuario que ya tenía la app
+    // instalada en v1 sobreviven intactos. Regla operativa del Paso 11
+    // cumplida: el test hermano de esta migración vive en
+    // `test/data/local/migration_test.dart`.
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await migrator.createTable(syncCursor);
+        await migrator.addColumn(outboxOps, outboxOps.errorMessage);
+      }
+    },
   );
+
+  /// `null`: el dispositivo nunca hizo un pull/bootstrap exitoso todavía —
+  /// `SyncEngine.pull()` lo trata como "usa `CURSOR_ZERO`" (equivalente a
+  /// pedir todo desde el principio).
+  Future<String?> readCursor() async {
+    final row = await (select(syncCursor)..where((t) => t.id.equals(0))).getSingleOrNull();
+    return row?.cursor;
+  }
+
+  Future<void> writeCursor(String cursor, {required DateTime now}) {
+    return into(
+      syncCursor,
+    ).insertOnConflictUpdate(SyncCursorCompanion.insert(cursor: cursor, updatedAt: now));
+  }
 
   /// El outbox es una tabla más del mismo esquema (ADR-002): "guardar
   /// visita + encolar operación" es una única transacción SQLite, no dos
