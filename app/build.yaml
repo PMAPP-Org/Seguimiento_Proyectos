@@ -9,9 +9,18 @@
 # lo corrige para todos los modelos del proyecto de una vez, presente y
 # futuro, en vez de anotar cada clase individualmente y arriesgarse a que
 # alguna se quede sin la anotación.
+#
+# Hallazgo del Paso 13: sin `explicit_to_json: true`, el `toJson()`
+# generado para un modelo con un campo anidado (p.ej. `LoginRequest.
+# deviceInfo`) inserta el objeto Dart anidado tal cual (`'device_info':
+# instance.deviceInfo`) en vez de su `Map` serializado (`instance.
+# deviceInfo.toJson()`) — el `Map` resultante de `.toJson()` deja de ser
+# JSON-serializable por sí mismo. Global, mismo motivo que `field_rename`:
+# corrige la clase de bug para todo modelo anidado presente y futuro.
 targets:
   $default:
     builders:
       json_serializable:
         options:
           field_rename: snake
+          explicit_to_json: true
