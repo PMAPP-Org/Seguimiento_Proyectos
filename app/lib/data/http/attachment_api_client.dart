@@ -4,13 +4,26 @@
 // un host de object storage (Cloudflare R2/MinIO), que autentica por firma
 // en la propia URL, no con el bearer token de la API de VisitaCampo — mismo
 // motivo por el que `AuthInterceptor` no debe interceptar esta llamada.
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../../core/attachments/attachment_result.dart';
 import '../../core/attachments/attachment_transport.dart';
 
 class AttachmentApiClient implements AttachmentTransport {
-  AttachmentApiClient({required this._dio, required this._accessTokenProvider}) : _uploadDio = Dio();
+  // `uploadDio` es inyectable (por defecto `Dio()`, el mismo comportamiento
+  // de siempre) solo para poder probar `upload()` con un
+  // `FakeHttpClientAdapter` sin red real (mismo patrón que
+  // `test/data/http/sync_api_client_test.dart`) -- sigue siendo, en
+  // producción, un `Dio` propio sin baseUrl ni cabeceras de autorización,
+  // nunca el `_dio` compartido con `AuthInterceptor` (ver el comentario de
+  // arriba sobre por qué).
+  AttachmentApiClient({
+    required this._dio,
+    required this._accessTokenProvider,
+    Dio? uploadDio,
+  }) : _uploadDio = uploadDio ?? Dio();
 
   final Dio _dio;
   final Dio _uploadDio;
@@ -49,12 +62,19 @@ class AttachmentApiClient implements AttachmentTransport {
   Future<AttachmentResult<void>> upload({
     required String uploadUrl,
     required Map<String, String> headers,
-    required List<int> bytes,
+    required Uint8List bytes,
   }) async {
     try {
       await _uploadDio.put<void>(
         uploadUrl,
-        data: bytes,
+        // `Uint8List.fromList` es una copia sin costo real cuando `bytes` ya
+        // es un `Uint8List` (el caso común) y una red de seguridad si algún
+        // día dejara de serlo: el tipo del parámetro ya lo garantiza en
+        // compilación, pero Dio decide cómo serializar `data:` mirando el
+        // tipo en **tiempo de ejecución**, así que la garantía se refuerza
+        // en el propio punto donde Dio la consume (hallazgo Importante de la
+        // revisión final — ver el docstring de `AttachmentTransport.upload`).
+        data: Uint8List.fromList(bytes),
         options: Options(headers: headers),
       );
       return const AttachmentResult.ok(null);

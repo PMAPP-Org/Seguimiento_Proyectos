@@ -2,6 +2,8 @@
 // necesita (Tarea 7 del plan de despliegue del demo). Implementada por
 // `AttachmentApiClient` (Dio real, `data/http/attachment_api_client.dart`) y
 // por `FakeAttachmentTransport` en los tests.
+import 'dart:typed_data';
+
 import 'attachment_result.dart';
 
 class PresignData {
@@ -24,10 +26,20 @@ abstract class AttachmentTransport {
 
   /// `PUT` directo a `uploadUrl` (host del object storage, no de la API de
   /// VisitaCampo) con los `headers` que el servidor exigió al firmar.
+  ///
+  /// `bytes` es `Uint8List`, no el `List<int>` más amplio (hallazgo
+  /// Importante de la revisión final): Dio solo envía binario crudo en
+  /// `data:` cuando el valor en tiempo de ejecución es efectivamente un
+  /// `Uint8List` — cualquier otro `List<int>` (p. ej. el resultado de
+  /// `.filled(...)` o `.generate(...)`) cae en el transformer por defecto de
+  /// Dio para contenido no-JSON y se serializa como texto, corrompiendo la
+  /// subida. Antes de este fix el tipo declarado no garantizaba nada: solo
+  /// funcionaba porque `File.readAsBytes()` devuelve un `Uint8List` por
+  /// accidente de implementación, no por contrato del tipo declarado.
   Future<AttachmentResult<void>> upload({
     required String uploadUrl,
     required Map<String, String> headers,
-    required List<int> bytes,
+    required Uint8List bytes,
   });
 
   /// `POST /v1/attachments/{sha256}/commit`.
