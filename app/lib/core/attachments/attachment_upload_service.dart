@@ -22,18 +22,37 @@ class AttachmentUploadService {
   AttachmentUploadService({
     required this.db,
     required this.transport,
-    Future<List<int>> Function(String path)? readBytes,
+    Future<Uint8List> Function(String path)? readBytes,
   }) : _readBytes = readBytes ?? _defaultReadBytes;
 
   final AppDatabase db;
   final AttachmentTransport transport;
-  final Future<List<int>> Function(String path) _readBytes;
+  final Future<Uint8List> Function(String path) _readBytes;
 
-  static Future<List<int>> _defaultReadBytes(String path) => File(path).readAsBytes();
+  // `File.readAsBytes()` ya devuelve `Future<Uint8List>` en tiempo de
+  // ejecución (hallazgo Importante de la revisión final: la subida real
+  // solo funcionaba porque este valor concreto es un `Uint8List`, no porque
+  // el tipo lo garantizara en algún punto de la cadena — ver
+  // `AttachmentTransport.upload` y `AttachmentApiClient.upload`, que ahora
+  // declaran `Uint8List` explícito de punta a punta).
+  static Future<Uint8List> _defaultReadBytes(String path) => File(path).readAsBytes();
+
+  /// Filas que este drenaje intenta subir: `pending` (nunca se intentó, o
+  /// quedó reencolada) y `failed` (fallo previo).
+  ///
+  /// **Hallazgo Importante de la revisión final** (el botón "Sincronizar" es
+  /// el único mecanismo de reintento en este alcance: el reintento en
+  /// segundo plano del Paso 18 está diferido): seleccionar solo `pending`
+  /// dejaba una fila `failed` varada para siempre, porque ningún camino de
+  /// este archivo la devolvía nunca a `pending`. Se incluye `failed` aquí en
+  /// vez de resetearla a `pending` antes de seleccionar porque es
+  /// equivalente y más simple: esta lista ya es exactamente "lo que hay que
+  /// intentar subir ahora".
+  static const _statesToDrain = ['pending', 'failed'];
 
   Future<AttachmentDrainReport> drainPending() async {
     final pending =
-        await (db.select(db.attachmentQueue)..where((t) => t.state.equals('pending'))).get();
+        await (db.select(db.attachmentQueue)..where((t) => t.state.isIn(_statesToDrain))).get();
 
     var uploaded = 0;
     var failed = 0;
@@ -49,7 +68,7 @@ class AttachmentUploadService {
   }
 
   Future<bool> _drainOne(AttachmentQueueData row) async {
-    final List<int> bytes;
+    final Uint8List bytes;
     try {
       bytes = await _readBytes(row.localPath);
     } on Object {
