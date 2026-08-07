@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>VisitaCampo necesita tu ubicación para registrar dónde se capturó cada visita.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>VisitaCampo necesita la cámara para adjuntar una foto a cada visita.</string>
 </dict>
 </plist>
