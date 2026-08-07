@@ -102,4 +102,39 @@ void main() {
         .getSingle();
     expect(row.state, 'failed');
   });
+
+  test(
+    'un archivo local ilegible (borrado/sin permiso) marca la fila failed '
+    'sin propagar la excepción ni detener el resto del lote',
+    () async {
+      await db
+          .into(db.attachmentQueue)
+          .insert(
+            AttachmentQueueCompanion.insert(
+              sha256: 'g' * 64,
+              localPath: '/ruta/que/no/existe/foto-fantasma.jpg',
+              state: 'pending',
+              createdAt: DateTime.utc(2026, 8, 6),
+            ),
+          );
+      // No se programa ninguna respuesta de transporte: si la excepción de
+      // lectura se filtrara, presign() nunca se invocaría y el test fallaría
+      // igual (ya sea por la excepción sin capturar o por un fallo distinto).
+      // Sin `readBytes` override: usa el lector real `File.readAsBytes()`
+      // sobre una ruta inexistente, tal como ocurriría en un dispositivo real.
+      final service = AttachmentUploadService(db: db, transport: transport);
+
+      // Si la excepción de lectura se filtrara sin capturar, este `await`
+      // relanzaría y el test fallaría aquí mismo, en vez de continuar hacia
+      // las aserciones de abajo.
+      final report = await service.drainPending();
+
+      expect(report.uploaded, 0);
+      expect(report.failed, 1);
+      final row = await (db.select(db.attachmentQueue)
+            ..where((t) => t.sha256.equals('g' * 64)))
+          .getSingle();
+      expect(row.state, 'failed');
+    },
+  );
 }

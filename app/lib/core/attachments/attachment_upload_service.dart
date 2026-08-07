@@ -49,7 +49,15 @@ class AttachmentUploadService {
   }
 
   Future<bool> _drainOne(AttachmentQueueData row) async {
-    final bytes = await _readBytes(row.localPath);
+    final List<int> bytes;
+    try {
+      bytes = await _readBytes(row.localPath);
+    } on Object {
+      // Archivo local ausente/ilegible (borrado, permiso revocado, disco
+      // lleno, etc.): mismo tratamiento defensivo que un fallo de red —
+      // se marca failed y se sigue con el resto del lote (RD-02/RD-03).
+      return _markFailed(row.sha256);
+    }
     final presignResult = await transport.presign(
       sha256: row.sha256,
       size: bytes.length,

@@ -24,20 +24,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final dependencies = ref.read(appDependenciesProvider);
     setState(() => _isSyncing = true);
 
-    final drainReport = await dependencies.syncEngine.drainOutbox();
-    final attachmentReport = await dependencies.attachmentUploadService.drainPending();
-    await dependencies.syncEngine.pull();
+    try {
+      final drainReport = await dependencies.syncEngine.drainOutbox();
+      final attachmentReport = await dependencies.attachmentUploadService.drainPending();
+      await dependencies.syncEngine.pull();
 
-    if (!mounted) return;
-    setState(() => _isSyncing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Sincronización completa: ${drainReport.applied} visita(s) aplicadas, '
-          '${attachmentReport.uploaded} adjunto(s) subido(s).',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sincronización completa: ${drainReport.applied} visita(s) aplicadas, '
+            '${attachmentReport.uploaded} adjunto(s) subido(s).',
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      // Defensa en profundidad: pase lo que pase arriba, el botón nunca debe
+      // quedar deshabilitado permanentemente (hallazgo de revisión Tarea 7).
+      if (mounted) setState(() => _isSyncing = false);
+    }
   }
 
   @override
