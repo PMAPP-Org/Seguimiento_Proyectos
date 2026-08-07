@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/sync/result.dart';
 import '../capture/capture_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -27,17 +28,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final drainReport = await dependencies.syncEngine.drainOutbox();
       final attachmentReport = await dependencies.attachmentUploadService.drainPending();
-      await dependencies.syncEngine.pull();
+      final pullResult = await dependencies.syncEngine.pull();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Sincronización completa: ${drainReport.applied} visita(s) aplicadas, '
-            '${attachmentReport.uploaded} adjunto(s) subido(s).',
-          ),
-        ),
-      );
+
+      // Hallazgo Crítico/Importante de la revisión final: antes de este fix
+      // el SnackBar siempre decía "completa" pase lo que pase -- descartaba
+      // `quarantined`/`deferred` de `drainReport`, `failed` de
+      // `attachmentReport` y el `Result` de `pull()`. Un operador del demo no
+      // tenía forma de distinguir "todo sincronizó" de "el servidor rechazó
+      // la visita" o "no se pudo subir la foto" con solo mirar la pantalla.
+      final hasIssues =
+          drainReport.quarantined > 0 ||
+          drainReport.deferred > 0 ||
+          attachmentReport.failed > 0 ||
+          !pullResult.isOk;
+
+      final message = hasIssues
+          ? 'Sincronización incompleta: ${drainReport.applied} visita(s) aplicadas, '
+                '${drainReport.quarantined} rechazada(s), ${drainReport.deferred} pendiente(s) de '
+                'reintento, ${attachmentReport.uploaded} adjunto(s) subido(s), '
+                '${attachmentReport.failed} adjunto(s) fallido(s)'
+                '${pullResult.isOk ? '' : ', no se pudieron traer los cambios del servidor'}.'
+          : 'Sincronización completa: ${drainReport.applied} visita(s) aplicadas, '
+                '${attachmentReport.uploaded} adjunto(s) subido(s).';
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       // Defensa en profundidad: pase lo que pase arriba, el botón nunca debe
       // quedar deshabilitado permanentemente (hallazgo de revisión Tarea 7).
