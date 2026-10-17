@@ -1,17 +1,7 @@
-// `CaptureScreen` — Tarea 6 del plan de despliegue del demo. Formulario
-// FIJO (no el renderer dinámico del Paso 21, diferido) + GPS + una foto,
-// persistidos en `visits`/`outbox_ops`/`attachment_queue` a través de
-// `SyncEngine.enqueueVisitOp` (Paso 12) y `AttachmentQueueRepository`
-// (Tarea 6, Step 6) — ambos ya construidos antes de esta pantalla.
-//
-// Desviación del texto original del brief: `AppDependencies.authController`
-// debe estar en `Authenticated` para que `CaptureScreen._save()` no corte
-// temprano (mira `authState is! Authenticated`) — el brief no llamaba a
-// `controller.login()` en `buildDependencies()`, así que `state` se quedaba
-// en `Unauthenticated` y `_save()` nunca escribía nada. Se corrige aquí
-// autenticando primero, mismo patrón que `test/features/auth/
-// login_screen_test.dart` (cola una respuesta en `FakeAuthTransport` y
-// llama a `login()` antes de montar el widget).
+// `CaptureScreen` (Paso 22): plantilla de la caché local → formulario dinámico
+// → foto, GPS → guardado offline en una sola transacción. Sin red y sin
+// hardware: GPS y cámara son dobles (`MockGnss` del plan).
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -32,23 +22,29 @@ import 'package:visitacampo/features/capture/capture_screen.dart';
 
 import '../../core/auth/fake_auth_transport.dart';
 import '../../core/auth/fake_token_store.dart';
-
 import '../../support/test_app.dart';
 
-class _FakeLocationSource implements LocationSource {
-  const _FakeLocationSource(this.fix);
+class MockGnss implements LocationSource {
+  const MockGnss(this.fix);
   final LocationFix? fix;
 
   @override
   Future<LocationFix?> getCurrentFix() async => fix;
 }
 
-class _FakePhotoCapture implements PhotoCapture {
-  _FakePhotoCapture(this.photo);
-  final CapturedPhoto? photo;
+class FakeCamera implements PhotoCapture {
+  var _taken = 0;
 
   @override
-  Future<CapturedPhoto?> takePhoto() async => photo;
+  Future<CapturedPhoto?> takePhoto() async {
+    final n = _taken++;
+    return CapturedPhoto(
+      file: File.fromUri(Uri.file('/tmp/foto-$n.jpg')),
+      sha256: n.toRadixString(16).padLeft(64, '0'),
+      sizeBytes: 1024,
+      mime: 'image/jpeg',
+    );
+  }
 }
 
 TokenPair _tokenPair() => TokenPair(
@@ -57,122 +53,166 @@ TokenPair _tokenPair() => TokenPair(
   expiresIn: 900,
   refreshToken: 'refresh-1',
   refreshExpiresIn: 5184000,
-  serverTime: DateTime.utc(2026, 8, 6, 12),
+  serverTime: DateTime.utc(2026, 10, 17, 12),
 );
 
 const _user = UserProfile(id: 'user-1', username: 'agente1', orgId: 'org-1', roles: ['agent']);
 
+Map<String, dynamic> templateRow() => {
+  'id': 'tv-1',
+  'org_id': 'org-1',
+  'version': 1,
+  'change_seq': 1,
+  'deleted_at': null,
+  'template_id': 'tpl-1',
+  'name': 'Inspección',
+  'version_number': 1,
+  'published_at': '2026-10-01T00:00:00Z',
+  'definition': {
+    'fields': [
+      {
+        'key': 'tiene_planta',
+        'type': 'boolean',
+        'label': {'es': '¿Hay planta?'},
+        'required': true,
+      },
+      {
+        'key': 'altura_cm',
+        'type': 'number',
+        'label': {'es': 'Altura (cm)'},
+        'visible_if': {'op': 'eq', 'field': 'tiene_planta', 'value': true},
+      },
+      {
+        'key': 'foto_planta',
+        'type': 'photo',
+        'label': {'es': 'Foto de la planta'},
+        'required': true,
+        'visible_if': {'op': 'eq', 'field': 'tiene_planta', 'value': true},
+      },
+    ],
+  },
+};
+
 void main() {
   late AppDatabase db;
 
-  setUp(() {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
-  });
-
+  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  Future<AppDependencies> buildDependencies({LocationFix? fix, CapturedPhoto? photo}) async {
+  Future<AppDependencies> buildDependencies({bool withTemplate = true, LocationFix? fix}) async {
     final transport = FakeAuthTransport()
       ..loginResponses.add(AuthResult.ok(LoginResponse(tokens: _tokenPair(), user: _user)));
-    final controller = AuthController(
-      transport: transport,
-      tokenStore: FakeTokenStore(),
-      deviceId: 'device-1',
-    );
+    final controller = AuthController(transport: transport, tokenStore: FakeTokenStore(), deviceId: 'device-1');
     await controller.login(
       username: 'agente1',
       password: 'secret',
       deviceInfo: const DeviceInfo(deviceId: 'device-1', platform: 'android', appVersion: '1.0.0'),
     );
-    return AppDependencies(
+    final dependencies = AppDependencies(
       database: db,
       dio: Dio(),
       authController: controller,
       deviceId: 'device-1',
-      locationSource: _FakeLocationSource(fix),
-      photoCapture: _FakePhotoCapture(photo),
+      locationSource: MockGnss(fix),
+      photoCapture: FakeCamera(),
     );
+    if (withTemplate) await dependencies.formTemplates.upsertFromServerRow(templateRow());
+    return dependencies;
   }
 
-  testWidgets('guardar una visita con GPS y foto encola outbox + attachment_queue', (
-    tester,
-  ) async {
-    final photoFile = File.fromUri(Uri.file('/tmp/foto-demo.jpg'));
-    final dependencies = await buildDependencies(
-      fix: const LocationFix(lat: 4.6, lon: -74.1, accuracyM: 5),
-      photo: CapturedPhoto(
-        file: photoFile,
-        sha256: 'c' * 64,
-        sizeBytes: 1024,
-        mime: 'image/jpeg',
-      ),
-    );
-
+  Future<void> pumpCapture(WidgetTester tester, AppDependencies dependencies) async {
+    tester.view.physicalSize = const Size(1200, 4000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
         child: testApp(const CaptureScreen()),
       ),
     );
+    await tester.pumpAndSettle();
+  }
 
-    await tester.enterText(
-      find.byKey(const Key('capture_template_field')),
-      '11111111-1111-1111-1111-111111111111',
-    );
-    await tester.enterText(find.byKey(const Key('capture_altura_field')), '12');
-    await tester.enterText(find.byKey(const Key('capture_notas_field')), 'Todo en orden');
+  testWidgets('captura completa offline: formulario, foto del campo, GPS y foto adicional', (tester) async {
+    final dependencies = await buildDependencies(fix: const LocationFix(lat: 4.6, lon: -74.08, accuracyM: 4.2));
+    await pumpCapture(tester, dependencies);
+
+    // Una sola plantilla: se abre sola, con el formulario dinámico.
+    expect(find.text('¿Hay planta? *'), findsOneWidget);
+    expect(find.text('Altura (cm)'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Sí'));
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Altura (cm)'), '35');
+    await tester.tap(find.text('Tomar foto'));
+    await tester.pumpAndSettle();
+    expect(find.text('Foto adjunta.'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('capture_get_location_button')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('4.6'), findsOneWidget);
+    expect(find.text('lat: 4.6, lon: -74.08 (±4 m)'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('capture_take_photo_button')));
+    await tester.tap(find.byKey(const Key('capture_add_photo_button')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('foto-demo.jpg'), findsOneWidget);
+    expect(find.text('1 foto adicional'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('capture_save_button')));
     await tester.pumpAndSettle();
 
-    final visits = await db.select(db.visits).get();
-    expect(visits, hasLength(1));
-    expect(visits.single.lat, 4.6);
-    expect(visits.single.templateVersionId, '11111111-1111-1111-1111-111111111111');
-
-    final outboxOps = await db.select(db.outboxOps).get();
-    expect(outboxOps, hasLength(1));
-    expect(outboxOps.single.opType, 'create');
-    expect(outboxOps.single.entity, 'visit');
-
-    final attachmentQueue = await db.select(db.attachmentQueue).get();
-    expect(attachmentQueue, hasLength(1));
-    expect(attachmentQueue.single.sha256, 'c' * 64);
-    expect(attachmentQueue.single.state, 'pending');
+    // Todo quedó en la BD local, sin red: la UI puede mostrarlo ya.
+    final visit = await db.select(db.visits).getSingle();
+    expect(visit.templateVersionId, 'tv-1');
+    expect(visit.lat, 4.6);
+    final answers = jsonDecode(visit.answersJson) as Map<String, dynamic>;
+    expect(answers['tiene_planta'], true);
+    expect(answers['altura_cm'], 35);
+    final attachments = await db.select(db.visitAttachments).get();
+    expect(attachments.map((a) => a.id), contains(answers['foto_planta']));
+    expect(attachments, hasLength(2), reason: 'la del campo y la adicional');
+    expect(await db.select(db.attachmentQueue).get(), hasLength(2));
+    expect((await db.select(db.outboxOps).get()).map((o) => o.entity), [
+      'visit',
+      'visit_attachment',
+      'visit_attachment',
+    ]);
   });
 
-  testWidgets('guardar una visita sin foto no toca attachment_queue', (tester) async {
-    final dependencies = await buildDependencies(fix: null, photo: null);
+  testWidgets('con campos obligatorios sin responder no guarda nada', (tester) async {
+    final dependencies = await buildDependencies();
+    await pumpCapture(tester, dependencies);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: testApp(const CaptureScreen()),
-      ),
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('capture_template_field')),
-      '11111111-1111-1111-1111-111111111111',
-    );
-    await tester.enterText(find.byKey(const Key('capture_altura_field')), '9');
-
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Sí'));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('capture_save_button')));
     await tester.pumpAndSettle();
 
-    final visits = await db.select(db.visits).get();
-    expect(visits, hasLength(1));
-    expect(visits.single.lat, isNull);
+    expect(find.text('Revisa los campos marcados antes de guardar.'), findsOneWidget);
+    expect(find.text('Este campo es obligatorio.'), findsOneWidget, reason: 'la foto obligatoria');
+    expect(await db.select(db.visits).get(), isEmpty);
+    expect(await db.select(db.outboxOps).get(), isEmpty);
+  });
 
-    final attachmentQueue = await db.select(db.attachmentQueue).get();
-    expect(attachmentQueue, isEmpty);
+  testWidgets('sin plantillas en el dispositivo pide sincronizar', (tester) async {
+    final dependencies = await buildDependencies(withTemplate: false);
+    await pumpCapture(tester, dependencies);
+
+    expect(find.byKey(const Key('capture_no_templates')), findsOneWidget);
+    expect(find.byKey(const Key('capture_save_button')), findsNothing);
+  });
+
+  testWidgets('sin GPS se avisa y se puede guardar igual', (tester) async {
+    final dependencies = await buildDependencies();
+    await pumpCapture(tester, dependencies);
+
+    await tester.tap(find.byKey(const Key('capture_get_location_button')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No se pudo obtener la ubicación'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'No'));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('capture_save_button')));
+    await tester.pumpAndSettle();
+    final visit = await db.select(db.visits).getSingle();
+    expect(visit.lat, isNull);
   });
 }

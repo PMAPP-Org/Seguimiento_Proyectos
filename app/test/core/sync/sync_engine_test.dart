@@ -79,7 +79,7 @@ void main() {
               PushOpOutcome(
                 opUuid: 'id-0',
                 status: 'conflict',
-                serverRow: serverVisitRow(version: 2, lat: 9.9),
+                serverRow: {'entity': 'visit', 'data': serverVisitRow(version: 2, lat: 9.9)},
               ),
             ],
           ),
@@ -165,7 +165,7 @@ void main() {
           PushResponse(
             schemaVersion: 1,
             results: [
-              PushOpOutcome(opUuid: 'id-0', status: 'applied', serverRow: serverVisitRow()),
+              PushOpOutcome(opUuid: 'id-0', status: 'applied', serverRow: {'entity': 'visit', 'data': serverVisitRow()}),
             ],
           ),
         ),
@@ -193,7 +193,7 @@ void main() {
           PushResponse(
             schemaVersion: 1,
             results: [
-              PushOpOutcome(opUuid: 'id-0', status: 'applied', serverRow: serverVisitRow()),
+              PushOpOutcome(opUuid: 'id-0', status: 'applied', serverRow: {'entity': 'visit', 'data': serverVisitRow()}),
             ],
           ),
         ),
@@ -248,6 +248,112 @@ void main() {
       expect(await db.readCursor(), 'c1:00000000000000000042');
       expect(await db.select(db.visits).get(), hasLength(1));
       expect(transport.pullCalls.single.cursor, cursorZero);
+    });
+  });
+
+  group('adjuntos de visita y server_row (Paso 22)', () {
+    Map<String, dynamic> attachmentData({String? deletedAt}) => {
+      'id': 'att-1',
+      'org_id': 'org-1',
+      'version': 1,
+      'change_seq': 60,
+      'deleted_at': deletedAt,
+      'visit_id': 'visit-1',
+      'sha256': 'ab' * 32,
+      'role': 'foto',
+      'caption': null,
+      'captured_at': '2026-10-17T14:00:00Z',
+      'order': 0,
+    };
+
+    Future<String> enqueueAttachmentOp() async {
+      await db
+          .into(db.outboxOps)
+          .insert(
+            OutboxOpsCompanion.insert(
+              opUuid: 'op-att',
+              entity: 'visit_attachment',
+              entityId: 'att-1',
+              opType: 'create',
+              payloadJson: '{"id": "att-1"}',
+              state: 'pending',
+              createdAt: DateTime.utc(2026, 10, 17),
+            ),
+          );
+      return 'op-att';
+    }
+
+    test('conflicto de un adjunto: se aplica su server_row y la op se borra', () async {
+      final opUuid = await enqueueAttachmentOp();
+      transport.pushResponses.add(
+        Result.ok(
+          PushResponse(
+            schemaVersion: 1,
+            results: [
+              PushOpOutcome(
+                opUuid: opUuid,
+                status: 'conflict',
+                serverVersion: 1,
+                serverRow: {'entity': 'visit_attachment', 'data': attachmentData()},
+              ),
+            ],
+          ),
+        ),
+      );
+      final report = await buildEngine().drainOutbox();
+      expect(report.conflicted, 1);
+      expect(await db.select(db.outboxOps).get(), isEmpty);
+      expect((await db.select(db.visitAttachments).getSingle()).sha256, 'ab' * 32);
+    });
+
+    test('un server_row que no es un EntityRecord va a cuarentena, no se pierde ni se atasca', () async {
+      final opUuid = await enqueueAttachmentOp();
+      transport.pushResponses.add(
+        Result.ok(
+          PushResponse(
+            schemaVersion: 1,
+            results: [
+              // La forma que el cliente esperaba antes del Paso 22: `data` suelto.
+              PushOpOutcome(opUuid: opUuid, status: 'conflict', serverRow: serverVisitRow()),
+            ],
+          ),
+        ),
+      );
+      final report = await buildEngine().drainOutbox();
+      expect(report.quarantined, 1);
+      final op = await db.select(db.outboxOps).getSingle();
+      expect(op.state, 'quarantine', reason: 'nunca queda en inflight');
+    });
+
+    test('el pull guarda los adjuntos y sus tombstones los quitan', () async {
+      transport.pullResponses
+        ..add(
+          Result.ok(
+            PullResponse(
+              rows: [PullRow(entity: 'visit_attachment', data: attachmentData())],
+              tombstones: [],
+              nextCursor: 'c1:00000000000000000060',
+              hasMore: false,
+            ),
+          ),
+        )
+        ..add(
+          Result.ok(
+            PullResponse(
+              rows: [],
+              tombstones: [
+                PullTombstone(entity: 'visit_attachment', id: 'att-1', changeSeq: 61, deletedAt: DateTime.utc(2026, 10, 18)),
+              ],
+              nextCursor: 'c1:00000000000000000061',
+              hasMore: false,
+            ),
+          ),
+        );
+      final engine = buildEngine();
+      await engine.pull();
+      expect((await db.select(db.visitAttachments).getSingle()).position, 0);
+      await engine.pull();
+      expect(await db.select(db.visitAttachments).get(), isEmpty);
     });
   });
 

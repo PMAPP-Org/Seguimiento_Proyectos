@@ -166,4 +166,63 @@ void main() {
         );
     expect(await db.select(db.formTemplateVersions).get(), hasLength(1));
   });
+
+  test('v3 → v4: la cola de subida conserva sus fotos (JPEG) y nace la tabla de adjuntos', () async {
+    final raw = sqlite3.sqlite3.openInMemory();
+    addTearDown(raw.close);
+
+    // Esquema v3 (Paso 21) a mano: v2 + `form_template_versions`.
+    raw.execute('''
+      CREATE TABLE visits (
+        id TEXT NOT NULL PRIMARY KEY, org_id TEXT NOT NULL, version INTEGER NOT NULL,
+        change_seq INTEGER NULL, deleted_at INTEGER NULL, template_version_id TEXT NOT NULL,
+        answers_json TEXT NOT NULL, lat REAL NULL, lon REAL NULL, accuracy_m REAL NULL,
+        altitude_m REAL NULL, captured_at INTEGER NOT NULL, device_id TEXT NOT NULL,
+        created_by TEXT NOT NULL
+      );
+      CREATE TABLE outbox_ops (
+        op_uuid TEXT NOT NULL PRIMARY KEY, entity TEXT NOT NULL, entity_id TEXT NOT NULL,
+        op_type TEXT NOT NULL, base_version INTEGER NULL, payload_json TEXT NOT NULL,
+        state TEXT NOT NULL, created_at INTEGER NOT NULL, error_message TEXT NULL
+      );
+      CREATE TABLE attachment_queue (
+        sha256 TEXT NOT NULL PRIMARY KEY, local_path TEXT NOT NULL, state TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE sync_cursor (id INTEGER NOT NULL PRIMARY KEY, cursor TEXT NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE TABLE form_template_versions (
+        id TEXT NOT NULL PRIMARY KEY, org_id TEXT NOT NULL, template_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL, name TEXT NULL, definition_json TEXT NOT NULL,
+        published_at INTEGER NULL, deleted_at INTEGER NULL, version INTEGER NOT NULL,
+        change_seq INTEGER NULL
+      );
+    ''');
+    raw.execute('PRAGMA user_version = 3;');
+    raw.execute(
+      "INSERT INTO attachment_queue (sha256, local_path, state, created_at) "
+      "VALUES ('${'c' * 64}', '/fotos/1.jpg', 'pending', 1767225600);",
+    );
+
+    final db = AppDatabase.forTesting(NativeDatabase.opened(raw));
+    addTearDown(db.close);
+
+    final upload = await db.select(db.attachmentQueue).getSingle();
+    expect(upload.localPath, '/fotos/1.jpg');
+    expect(upload.mime, 'image/jpeg', reason: 'antes de v4 solo había fotos de cámara (JPEG)');
+
+    await db
+        .into(db.visitAttachments)
+        .insert(
+          VisitAttachmentsCompanion.insert(
+            id: 'att-1',
+            orgId: 'org-1',
+            visitId: 'visit-1',
+            sha256: 'c' * 64,
+            role: 'foto',
+            capturedAt: DateTime.utc(2026, 10, 17),
+            position: 0,
+          ),
+        );
+    expect(await db.select(db.visitAttachments).get(), hasLength(1));
+  });
 }

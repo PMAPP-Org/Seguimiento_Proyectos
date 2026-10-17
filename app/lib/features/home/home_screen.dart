@@ -7,12 +7,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/auth_state.dart';
 import '../../core/providers.dart';
 import '../../core/sync/result.dart';
+import '../../data/local/visit_status_repository.dart';
 import '../../l10n/l10n.dart';
 import '../../ui/widgets/app_button.dart';
 import '../../ui/widgets/app_page_body.dart';
 import '../capture/capture_screen.dart';
+import 'visit_status_list.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +26,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isSyncing = false;
+
+  /// Visitas recientes con su estado (Paso 22). `null` mientras se cargan.
+  List<VisitSummary>? _visits;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVisits();
+  }
+
+  Future<void> _loadVisits() async {
+    final dependencies = ref.read(appDependenciesProvider);
+    final authState = dependencies.authController.state;
+    final visits = authState is Authenticated
+        ? await dependencies.visitStatus.recentVisits(orgId: authState.user.orgId)
+        : const <VisitSummary>[];
+    if (mounted) setState(() => _visits = visits);
+  }
 
   Future<void> _sync() async {
     final dependencies = ref.read(appDependenciesProvider);
@@ -66,6 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Defensa en profundidad: pase lo que pase arriba, el botón nunca debe
       // quedar deshabilitado permanentemente (hallazgo de revisión Tarea 7).
       if (mounted) setState(() => _isSyncing = false);
+      await _loadVisits();
     }
   }
 
@@ -76,17 +98,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.appTitle)),
       body: AppPageBody(
-        centerVertically: true,
         children: [
           Text(l10n.homeSessionStarted(dependencies.deviceId), textAlign: TextAlign.center),
           const AppGap.lg(),
           AppButton(
             key: const Key('home_new_visit_button'),
             label: l10n.homeNewVisit,
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              await Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const CaptureScreen()),
               );
+              // UI optimista: la visita recién guardada aparece ya, sin red.
+              await _loadVisits();
             },
           ),
           const AppGap.sm(),
@@ -97,6 +120,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             isLoading: _isSyncing,
             onPressed: _sync,
           ),
+          const AppGap.lg(),
+          Text(l10n.homeRecentVisits, style: Theme.of(context).textTheme.titleMedium),
+          if (_visits == null)
+            const Center(child: CircularProgressIndicator())
+          else
+            VisitStatusList(visits: _visits!),
         ],
       ),
     );

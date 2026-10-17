@@ -99,6 +99,12 @@ class AttachmentQueue extends Table {
   TextColumn get state => text()();
   DateTimeColumn get createdAt => dateTime()();
 
+  /// MIME con el que se presigna y confirma la subida (allow-list del
+  /// servidor). Añadida en `schemaVersion` 4: hasta entonces solo había fotos
+  /// JPEG de la cámara; la firma es PNG, y el servidor comprueba los magic
+  /// bytes contra este valor.
+  TextColumn get mime => text().withDefault(const Constant('image/jpeg'))();
+
   @override
   Set<Column> get primaryKey => {sha256};
 }
@@ -146,6 +152,35 @@ class FormTemplateVersions extends Table {
   DateTimeColumn get publishedAt => dateTime().nullable()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
   IntColumn get version => integer()();
+  IntColumn get changeSeq => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Espejo local de `visit_attachment` (Paso 22): qué foto o firma pertenece a
+/// qué visita. Añadida en `schemaVersion` 4.
+///
+/// La escribe la captura (en la misma transacción que la visita, su
+/// operación de outbox y la cola de subida) y la actualiza el pull. Es lo que
+/// permite enseñar al agente "con fotos pendientes de subir": el `sha256`
+/// enlaza cada adjunto con su fila en `AttachmentQueue`.
+class VisitAttachments extends Table {
+  TextColumn get id => text()();
+  TextColumn get orgId => text()();
+  TextColumn get visitId => text()();
+  TextColumn get sha256 => text()();
+
+  /// `foto` | `firma` | `doc` (contrato `VisitAttachment.role`).
+  TextColumn get role => text()();
+  TextColumn get caption => text().nullable()();
+  DateTimeColumn get capturedAt => dateTime()();
+
+  /// `order` del contrato (palabra reservada en SQL: se renombra aquí).
+  IntColumn get position => integer()();
+
+  /// `null` hasta que el servidor la confirma.
+  IntColumn get version => integer().nullable()();
   IntColumn get changeSeq => integer().nullable()();
 
   @override
