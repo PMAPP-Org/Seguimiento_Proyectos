@@ -16,6 +16,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:visitacampo/core/app_dependencies.dart';
 import 'package:visitacampo/core/attachments/attachment_result.dart';
 import 'package:visitacampo/core/attachments/attachment_upload_service.dart';
@@ -31,6 +32,8 @@ import '../../core/attachments/fake_attachment_transport.dart';
 import '../../core/auth/fake_auth_transport.dart';
 import '../../core/auth/fake_token_store.dart';
 import '../../core/sync/fake_sync_transport.dart';
+
+import '../../support/test_app.dart';
 
 void main() {
   testWidgets('Sincronizar drena el outbox, sube adjuntos pendientes y hace pull', (tester) async {
@@ -69,7 +72,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: const MaterialApp(home: HomeScreen()),
+        child: testApp(const HomeScreen()),
       ),
     );
 
@@ -131,7 +134,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-          child: const MaterialApp(home: HomeScreen()),
+          child: testApp(const HomeScreen()),
         ),
       );
 
@@ -140,7 +143,7 @@ void main() {
 
       expect(find.textContaining('Sincronización completa'), findsNothing);
       expect(find.textContaining('Sincronización incompleta'), findsOneWidget);
-      expect(find.textContaining('1 adjunto(s) fallido(s)'), findsOneWidget);
+      expect(find.textContaining('1 adjunto fallido'), findsOneWidget);
     },
   );
 }

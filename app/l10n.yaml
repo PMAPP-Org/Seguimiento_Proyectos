@@ -1,0 +1,8 @@
+# Textos de la app (flutter gen-l10n). Los textos viven en lib/l10n/*.arb; el
+# código los usa con `AppLocalizations.of(context)` (o `context.l10n`), nunca
+# como literales en los widgets (infra/scripts/lint_ui_tokens.sh).
+arb-dir: lib/l10n
+template-arb-file: app_es.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+nullable-getter: false

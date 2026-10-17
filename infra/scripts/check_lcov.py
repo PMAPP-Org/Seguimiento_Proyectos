@@ -1,7 +1,8 @@
 """Gate de cobertura de líneas sobre un `lcov.info` (`flutter test --coverage`).
 
-Excluye el código generado por build_runner (`*.g.dart`, `*.freezed.dart`):
-no lo escribe nadie a mano y contaría a favor o en contra sin significar nada.
+Excluye el código generado (`*.g.dart`, `*.freezed.dart` de build_runner y
+`app_localizations*.dart` de gen-l10n): no lo escribe nadie a mano y contaría a
+favor o en contra sin significar nada.
 
 Uso: python infra/scripts/check_lcov.py app/coverage/lcov.info --min 80
 """
@@ -15,13 +16,18 @@ from pathlib import Path
 GENERATED_SUFFIXES = (".g.dart", ".freezed.dart")
 
 
+def _is_generated(path: str) -> bool:
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    return name.endswith(GENERATED_SUFFIXES) or name.startswith("app_localizations")
+
+
 def coverage(lcov: Path) -> tuple[int, int]:
     found = hit = 0
     current: str | None = None
     for line in lcov.read_text(encoding="utf-8").splitlines():
         if line.startswith("SF:"):
             current = line[3:]
-        elif line.startswith("DA:") and current and not current.endswith(GENERATED_SUFFIXES):
+        elif line.startswith("DA:") and current and not _is_generated(current):
             _, count = line[3:].split(",")[:2]
             found += 1
             hit += int(count) > 0

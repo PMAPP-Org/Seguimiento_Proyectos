@@ -10,6 +10,9 @@ import '../../core/auth/auth_models.dart';
 import '../../core/auth/auth_result.dart';
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../l10n/l10n.dart';
+import '../../ui/widgets/app_button.dart';
+import '../../ui/widgets/app_page_body.dart';
 import '../home/home_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -63,46 +66,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  String _messageFor(AuthError error) => error.when(
-    network: (message) => 'No se pudo conectar con el servidor.',
-    invalidCredentials: () => 'Usuario o contraseña incorrectos.',
-    unauthorized: () => 'Sesión no autorizada.',
-    unexpectedStatus: (statusCode, body) => 'Error inesperado del servidor ($statusCode).',
-    malformedResponse: (details) => 'Respuesta del servidor no reconocida.',
-  );
+  String _messageFor(AuthError error) {
+    final l10n = context.l10n;
+    return error.when(
+      network: (message) => l10n.authErrorNetwork,
+      invalidCredentials: () => l10n.authErrorInvalidCredentials,
+      unauthorized: () => l10n.authErrorUnauthorized,
+      unexpectedStatus: (statusCode, body) => l10n.authErrorUnexpectedStatus(statusCode),
+      malformedResponse: (details) => l10n.authErrorMalformedResponse,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('VisitaCampo — Iniciar sesión')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      appBar: AppBar(title: Text(l10n.loginTitle)),
+      body: AutofillGroup(
+        child: AppPageBody(
+          centerVertically: true,
           children: [
+            Text(
+              l10n.appTitle,
+              style: Theme.of(context).textTheme.headlineMedium,
+              textAlign: TextAlign.center,
+            ),
+            const AppGap.lg(),
             TextField(
               key: const Key('login_username_field'),
               controller: _usernameController,
-              decoration: const InputDecoration(labelText: 'Usuario'),
+              decoration: InputDecoration(labelText: l10n.loginUsernameLabel),
+              autofillHints: const [AutofillHints.username],
+              textInputAction: TextInputAction.next,
+              autocorrect: false,
             ),
-            const SizedBox(height: 12),
+            const AppGap.sm(),
             TextField(
               key: const Key('login_password_field'),
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Contraseña'),
+              decoration: InputDecoration(labelText: l10n.loginPasswordLabel),
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_isSubmitting) _submit();
+              },
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
+            const AppGap.lg(),
+            AppButton(
               key: const Key('login_submit_button'),
-              onPressed: _isSubmitting ? null : _submit,
-              child: _isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Entrar'),
+              label: l10n.loginSubmit,
+              loadingLabel: l10n.loginSubmitting,
+              isLoading: _isSubmitting,
+              onPressed: _submit,
             ),
           ],
         ),
