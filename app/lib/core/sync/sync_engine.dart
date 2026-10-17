@@ -5,10 +5,12 @@
 // `AppDatabase` (Paso 11) sí es real incluso en test, porque `NativeDatabase`
 // funciona en el host sin emulador (ya verificado en el Paso 11).
 //
-// **Alcance de entidades**: solo `visit` — es la única entidad que el push
+// **Alcance de entidades**: solo se empuja `visit` — es la única entidad que el push
 // del servidor acepta escribir en el MVP (Paso 8) y la única con tabla local
 // (Paso 11). El pull puede traer otras entidades; se ignoran a propósito
-// hasta que tengan tabla (ver `sync_transport.dart`).
+// hasta que tengan tabla (ver `sync_transport.dart`), salvo
+// `form_template_version`, que desde el Paso 21 alimenta la caché de
+// plantillas (`FormTemplateRepository`).
 //
 // **Backoff no persistido**: `attempt`/`nextAttemptAt` viven en memoria del
 // `SyncEngine` (`_backoffState`), no en `OutboxOps` — se reinician si la app
@@ -24,6 +26,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/local/database.dart';
+import '../../data/local/form_template_repository.dart';
 import 'backoff.dart';
 import 'result.dart';
 import 'sync_transport.dart';
@@ -62,10 +65,17 @@ class SyncEngine {
     DateTime Function()? clock,
     this.backoff = const ExponentialBackoffWithJitter(),
     this.maxBatchOps = 500,
+    FormTemplateRepository? templates,
   }) : _generateId = idGenerator ?? (() => const Uuid().v7()),
-       _now = clock ?? DateTime.now;
+       _now = clock ?? DateTime.now,
+       templates = templates ?? FormTemplateRepository(db);
 
   final AppDatabase db;
+
+  /// Caché de plantillas (Paso 21) que alimenta el pull. La app comparte esta
+  /// misma instancia con las pantallas (`AppDependencies`), para que la
+  /// invalidación al recibir una versión nueva la vea quien renderiza.
+  final FormTemplateRepository templates;
   final SyncTransport transport;
   final String deviceId;
   final BackoffPolicy backoff;
@@ -301,15 +311,22 @@ class SyncEngine {
   Future<Result<bool>> _applyPullResponse(PullResponse response) async {
     await db.transaction(() async {
       for (final row in response.rows) {
-        if (row.entity == 'visit') {
-          await _upsertVisitFromServerRow(row.data);
+        switch (row.entity) {
+          case 'visit':
+            await _upsertVisitFromServerRow(row.data);
+          case 'form_template_version':
+            // Una fila que no cumple el contrato se ignora sin bloquear el
+            // resto del pull (`FormTemplateRepository.upsertFromServerRow`).
+            await templates.upsertFromServerRow(row.data);
         }
-        // Otras entidades: sin tabla local todavía (ver docstring del
-        // archivo) — se ignoran a propósito hasta el Paso 21+.
+        // `visit_attachment` / `assignment`: sin tabla local todavía.
       }
       for (final tombstone in response.tombstones) {
-        if (tombstone.entity == 'visit') {
-          await (db.delete(db.visits)..where((t) => t.id.equals(tombstone.id))).go();
+        switch (tombstone.entity) {
+          case 'visit':
+            await (db.delete(db.visits)..where((t) => t.id.equals(tombstone.id))).go();
+          case 'form_template_version':
+            await templates.markDeleted(tombstone.id, tombstone.deletedAt);
         }
       }
       await db.writeCursor(response.nextCursor, now: _now());
@@ -324,6 +341,9 @@ class SyncEngine {
         await db.transaction(() async {
           for (final visitJson in bootstrap.visits) {
             await _upsertVisitFromServerRow(visitJson);
+          }
+          for (final templateJson in bootstrap.formTemplateVersions) {
+            await templates.upsertFromServerRow(templateJson);
           }
           await db.writeCursor(bootstrap.cursor, now: _now());
         });

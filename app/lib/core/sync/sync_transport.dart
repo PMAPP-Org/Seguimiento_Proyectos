@@ -122,12 +122,14 @@ abstract class PullResponse with _$PullResponse {
 }
 
 /// Contrato `BootstrapResponse`, recortado a lo que `SyncEngine` usa hoy
-/// (`cursor` + `visits`) — ver la nota de alcance del archivo.
+/// (`cursor`, `visits` y, desde el Paso 21, `form_template_versions`) — ver
+/// la nota de alcance del archivo.
 @freezed
 abstract class BootstrapResponse with _$BootstrapResponse {
   const factory BootstrapResponse({
     required String cursor,
     required List<Map<String, dynamic>> visits,
+    @Default(<Map<String, dynamic>>[]) List<Map<String, dynamic>> formTemplateVersions,
   }) = _BootstrapResponse;
 
   factory BootstrapResponse.fromJson(Map<String, dynamic> json) => _$BootstrapResponseFromJson(json);

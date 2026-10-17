@@ -61,5 +61,36 @@
   },
   "captureSave": "Guardar visita",
   "captureSaving": "Guardando visita…",
-  "captureSaved": "Visita guardada."
+  "captureSaved": "Visita guardada.",
+
+  "formFieldRequired": "{label} *",
+  "@formFieldRequired": {
+    "description": "Etiqueta de un campo obligatorio del formulario dinámico.",
+    "placeholders": { "label": { "type": "String" } }
+  },
+  "formYes": "Sí",
+  "formNo": "No",
+  "formPickDate": "Elegir fecha",
+  "formPickDateTime": "Elegir fecha y hora",
+  "formTakePhoto": "Tomar foto",
+  "formRetakePhoto": "Repetir foto",
+  "formPhotoAttached": "Foto adjunta.",
+  "formSign": "Firmar",
+  "formResign": "Firmar de nuevo",
+  "formSignatureAttached": "Firma adjunta.",
+  "formGetLocation": "Obtener ubicación",
+  "formUpdateLocation": "Actualizar ubicación",
+  "formCaptureUnavailable": "No disponible en esta pantalla",
+  "formErrorRequired": "Este campo es obligatorio.",
+  "formErrorTooShort": "El texto es demasiado corto.",
+  "formErrorTooLong": "El texto es demasiado largo.",
+  "formErrorNotANumber": "Escribe un número.",
+  "formErrorNotAnInteger": "Escribe un número entero.",
+  "formErrorOutOfRange": "El valor está fuera del rango permitido.",
+  "formErrorTooFewSelected": "Selecciona más opciones.",
+  "formErrorTooManySelected": "Selecciona menos opciones.",
+  "formErrorInvalid": "Valor no válido.",
+  "formTemplateMissing": "Esta plantilla todavía no está en el dispositivo. Sincroniza e inténtalo de nuevo.",
+  "formTemplateUnsupported": "Esta plantilla necesita una versión más reciente de la app.",
+  "formTemplateCorrupt": "La plantilla guardada estaba dañada y se volverá a descargar. Sincroniza e inténtalo de nuevo."
 }

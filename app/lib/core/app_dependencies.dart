@@ -30,6 +30,7 @@ import '../data/http/auth_interceptor.dart';
 import '../data/http/sync_api_client.dart';
 import '../data/local/database.dart';
 import '../data/local/encryption_key_store.dart';
+import '../data/local/form_template_repository.dart';
 import '../data/location/geolocator_location_source.dart';
 
 class AppDependencies {
@@ -69,6 +70,10 @@ class AppDependencies {
   final PhotoCapture photoCapture;
   final SyncEngine syncEngine;
   final AttachmentUploadService attachmentUploadService;
+
+  /// Caché de plantillas (Paso 21): **la misma** instancia que alimenta el
+  /// pull, para que las pantallas vean su invalidación.
+  FormTemplateRepository get formTemplates => syncEngine.templates;
 
   static Future<AppDependencies> bootstrap() async {
     const secureStorage = FlutterSecureStorage();
