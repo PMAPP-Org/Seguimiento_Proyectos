@@ -1,5 +1,12 @@
 # VisitaCampo
 
+> **Repositorio archivado (2026-10-17).** El monorepo se separó en dos repositorios, cada uno con su historial y con la misma línea base de CI y seguridad:
+>
+> - **[PMAPP-Org/SUNO_server](https://github.com/PMAPP-Org/SUNO_server)**: API, panel de administración, infraestructura, documentación de arquitectura y SGSI ISO 27001, y el plan de construcción.
+> - **[PMAPP-Org/SUNO_client](https://github.com/PMAPP-Org/SUNO_client)**: la app móvil Flutter.
+>
+> Este repositorio queda de solo lectura, como evidencia del historial conjunto hasta v0.2.0 (cambios, revisiones y releases). Los issues abiertos se transfirieron a SUNO_server (#3 → #6, #5 → #7). Todo trabajo nuevo va en los repositorios de arriba.
+
 VisitaCampo es una aplicación offline-first de seguimiento de visitas de campo, compuesta por un cliente móvil Flutter y un backend Django.
 
 ## Fuente de verdad
