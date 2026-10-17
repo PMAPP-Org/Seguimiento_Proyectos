@@ -7,6 +7,7 @@ import 'package:visitacampo/core/sync/result.dart';
 import 'package:visitacampo/core/sync/sync_engine.dart';
 import 'package:visitacampo/core/sync/sync_transport.dart';
 import 'package:visitacampo/data/local/database.dart';
+import 'package:visitacampo/data/local/form_template_repository.dart';
 
 import 'fake_sync_transport.dart';
 
@@ -247,6 +248,108 @@ void main() {
       expect(await db.readCursor(), 'c1:00000000000000000042');
       expect(await db.select(db.visits).get(), hasLength(1));
       expect(transport.pullCalls.single.cursor, cursorZero);
+    });
+  });
+
+  group('plantillas de formulario (Paso 21)', () {
+    Map<String, dynamic> templateRow({required String id, required int versionNumber}) => {
+      'id': id,
+      'org_id': 'org-1',
+      'version': 1,
+      'change_seq': 50 + versionNumber,
+      'deleted_at': null,
+      'template_id': 'tpl-1',
+      'name': 'Inspección',
+      'version_number': versionNumber,
+      'definition': {
+        'fields': [
+          {
+            'key': 'campo_v$versionNumber',
+            'type': 'text',
+            'label': {'es': 'Campo'},
+          },
+        ],
+      },
+      'published_at': '2026-10-01T00:00:00Z',
+    };
+
+    String latestKey(TemplateLookup lookup) => switch (lookup) {
+      TemplateReady(:final definition) => definition.fields.single.key,
+      _ => fail('plantilla no lista: $lookup'),
+    };
+
+    test('el pull guarda las versiones y sus tombstones en la caché', () async {
+      final engine = buildEngine();
+      transport.pullResponses
+        ..add(
+          Result.ok(
+            PullResponse(
+              rows: [
+                PullRow(entity: 'form_template_version', data: templateRow(id: 'v-1', versionNumber: 1)),
+                PullRow(entity: 'form_template_version', data: templateRow(id: 'v-2', versionNumber: 2)),
+                // Una fila rota no tumba el resto del pull.
+                const PullRow(entity: 'form_template_version', data: {'id': 'roto'}),
+              ],
+              tombstones: [],
+              nextCursor: 'c1:00000000000000000052',
+              hasMore: false,
+            ),
+          ),
+        )
+        ..add(
+          Result.ok(
+            PullResponse(
+              rows: [],
+              tombstones: [
+                PullTombstone(
+                  entity: 'form_template_version',
+                  id: 'v-2',
+                  changeSeq: 53,
+                  deletedAt: DateTime.utc(2026, 10, 2),
+                ),
+              ],
+              nextCursor: 'c1:00000000000000000053',
+              hasMore: false,
+            ),
+          ),
+        );
+
+      expect((await engine.pull()).isOk, isTrue);
+      expect(latestKey(await engine.templates.latestForNewVisit(orgId: 'org-1', templateId: 'tpl-1')), 'campo_v2');
+
+      expect((await engine.pull()).isOk, isTrue);
+      expect(
+        latestKey(await engine.templates.latestForNewVisit(orgId: 'org-1', templateId: 'tpl-1')),
+        'campo_v1',
+        reason: 'la v2 retirada deja de ofrecerse',
+      );
+      expect(await db.readCursor(), 'c1:00000000000000000053');
+    });
+
+    test('el bootstrap también llena la caché', () async {
+      final engine = buildEngine();
+      transport.pullResponses.add(const Result.err(SyncError.cursorExpired()));
+      transport.bootstrapResponses.add(
+        Result.ok(
+          BootstrapResponse(
+            cursor: 'c1:00000000000000000099',
+            visits: const [],
+            formTemplateVersions: [templateRow(id: 'v-1', versionNumber: 1)],
+          ),
+        ),
+      );
+
+      expect((await engine.pull()).isOk, isTrue);
+      expect(latestKey(await engine.templates.latestForNewVisit(orgId: 'org-1', templateId: 'tpl-1')), 'campo_v1');
+    });
+
+    test('BootstrapResponse lee form_template_versions del contrato', () {
+      final parsed = BootstrapResponse.fromJson({
+        'cursor': 'c1:00000000000000000001',
+        'visits': <dynamic>[],
+        'form_template_versions': [templateRow(id: 'v-1', versionNumber: 1)],
+      });
+      expect(parsed.formTemplateVersions, hasLength(1));
     });
   });
 

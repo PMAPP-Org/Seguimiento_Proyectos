@@ -122,3 +122,32 @@ class SyncCursor extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// Caché local de `form_template_version` (Paso 21, tareas 5-6), alimentada
+/// por el pull. Añadida en `schemaVersion` 3.
+///
+/// **La clave es la versión, no la plantilla** (corrige H-11: QField cacheaba
+/// por `layerId` en un `Q_GLOBAL_STATIC` que nunca se invalidaba). Cada fila es
+/// una versión inmutable; una visita histórica sigue leyendo la suya, y una
+/// visita nueva usa la publicada más alta de su plantilla
+/// (`FormTemplateRepository`). Un tombstone marca `deletedAt` en vez de borrar,
+/// por la misma razón: la versión deja de ofrecerse para visitas nuevas, pero
+/// las visitas que ya la referencian siguen siendo interpretables.
+///
+/// `definitionJson` se guarda tal como llegó y se valida **al usarlo**: la
+/// tabla no interpreta la plantilla.
+class FormTemplateVersions extends Table {
+  TextColumn get id => text()();
+  TextColumn get orgId => text()();
+  TextColumn get templateId => text()();
+  IntColumn get versionNumber => integer()();
+  TextColumn get name => text().nullable()();
+  TextColumn get definitionJson => text()();
+  DateTimeColumn get publishedAt => dateTime().nullable()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get version => integer()();
+  IntColumn get changeSeq => integer().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

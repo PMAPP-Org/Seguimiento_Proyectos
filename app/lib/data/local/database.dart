@@ -19,7 +19,7 @@ part 'database.g.dart';
 /// integración. Cualquier repositorio que necesite la BD recibe esta misma
 /// instancia (inyectada vía Riverpod desde el Paso 22 en adelante) — nunca
 /// construye la suya propia.
-@DriftDatabase(tables: [Visits, OutboxOps, AttachmentQueue, SyncCursor])
+@DriftDatabase(tables: [Visits, OutboxOps, AttachmentQueue, SyncCursor, FormTemplateVersions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase._(super.executor);
 
@@ -51,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.forTesting(QueryExecutor executor) => AppDatabase._(executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -66,6 +66,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await migrator.createTable(syncCursor);
         await migrator.addColumn(outboxOps, outboxOps.errorMessage);
+      }
+      // v2 → v3 (Paso 21): caché de plantillas. Solo crea una tabla nueva.
+      if (from < 3) {
+        await migrator.createTable(formTemplateVersions);
       }
     },
   );
@@ -83,6 +87,11 @@ class AppDatabase extends _$AppDatabase {
       syncCursor,
     ).insertOnConflictUpdate(SyncCursorCompanion.insert(cursor: cursor, updatedAt: now));
   }
+
+  /// Olvida el cursor: el siguiente pull pide todo desde el principio. Lo usa
+  /// la caché de plantillas cuando encuentra una fila corrupta (Paso 21): los
+  /// upserts del pull son idempotentes, así que repetirlo solo cuesta datos.
+  Future<void> resetCursor() => (delete(syncCursor)..where((t) => t.id.equals(0))).go();
 
   /// El outbox es una tabla más del mismo esquema (ADR-002): "guardar
   /// visita + encolar operación" es una única transacción SQLite, no dos
