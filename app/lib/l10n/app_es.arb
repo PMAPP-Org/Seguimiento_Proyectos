@@ -27,6 +27,26 @@
   "homeNewVisit": "Nueva visita",
   "homeSync": "Sincronizar",
   "homeSyncing": "Sincronizando…",
+  "homeRecentVisits": "Visitas recientes",
+  "homeNoVisits": "Todavía no hay visitas en este dispositivo.",
+  "homeVisitUntitled": "Visita",
+  "homeVisitAttachments": "{count, plural, =1{1 adjunto} other{{count} adjuntos}}",
+  "@homeVisitAttachments": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "homeVisitPendingUploads": "{count, plural, =1{1 por subir} other{{count} por subir}}",
+  "@homeVisitPendingUploads": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "visitStatusPending": "Pendiente",
+  "visitStatusSynced": "Sincronizada",
+  "visitStatusRejected": "Rechazada",
+
+  "signatureTitle": "Firma",
+  "signatureHint": "Firma con el dedo dentro del recuadro.",
+  "signatureClear": "Borrar",
+  "signatureAccept": "Aceptar firma",
+  "signatureEmpty": "Firma antes de aceptar.",
 
   "syncComplete": "Sincronización completa: {applied, plural, =1{1 visita aplicada} other{{applied} visitas aplicadas}}, {uploaded, plural, =1{1 adjunto subido} other{{uploaded} adjuntos subidos}}.",
   "@syncComplete": {
@@ -45,20 +65,31 @@
   "syncPullFailed": "No se pudieron traer los cambios del servidor.",
 
   "captureTitle": "Nueva visita",
-  "captureTemplateLabel": "ID de plantilla (UUID)",
-  "captureHeightLabel": "Altura (cm)",
-  "captureNotesLabel": "Notas",
+  "captureTemplateLabel": "Plantilla",
+  "captureNoTemplates": "No hay plantillas en este dispositivo. Sincroniza para descargarlas.",
   "captureGetLocation": "Obtener ubicación",
   "captureLocation": "lat: {lat}, lon: {lon}",
   "@captureLocation": {
     "description": "Coordenadas en formato técnico (punto decimal), no localizado: se copian a SIG.",
     "placeholders": { "lat": { "type": "String" }, "lon": { "type": "String" } }
   },
-  "captureTakePhoto": "Tomar foto",
-  "capturePhoto": "Foto: {fileName}",
-  "@capturePhoto": {
-    "placeholders": { "fileName": { "type": "String" } }
+  "captureVisitLocation": "Ubicación de la visita",
+  "captureLocationWithAccuracy": "lat: {lat}, lon: {lon} (±{accuracy} m)",
+  "@captureLocationWithAccuracy": {
+    "description": "Coordenadas en formato técnico y precisión del GPS en metros.",
+    "placeholders": {
+      "lat": { "type": "String" },
+      "lon": { "type": "String" },
+      "accuracy": { "type": "int" }
+    }
   },
+  "captureLocationUnavailable": "No se pudo obtener la ubicación. Puedes guardar la visita sin ella.",
+  "captureExtraPhotos": "{count, plural, =0{Sin fotos adicionales} =1{1 foto adicional} other{{count} fotos adicionales}}",
+  "@captureExtraPhotos": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "captureAddPhoto": "Añadir foto",
+  "captureFixErrors": "Revisa los campos marcados antes de guardar.",
   "captureSave": "Guardar visita",
   "captureSaving": "Guardando visita…",
   "captureSaved": "Visita guardada.",

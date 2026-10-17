@@ -19,7 +19,9 @@ part 'database.g.dart';
 /// integración. Cualquier repositorio que necesite la BD recibe esta misma
 /// instancia (inyectada vía Riverpod desde el Paso 22 en adelante) — nunca
 /// construye la suya propia.
-@DriftDatabase(tables: [Visits, OutboxOps, AttachmentQueue, SyncCursor, FormTemplateVersions])
+@DriftDatabase(
+  tables: [Visits, OutboxOps, AttachmentQueue, SyncCursor, FormTemplateVersions, VisitAttachments],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase._(super.executor);
 
@@ -51,7 +53,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.forTesting(QueryExecutor executor) => AppDatabase._(executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -70,6 +72,12 @@ class AppDatabase extends _$AppDatabase {
       // v2 → v3 (Paso 21): caché de plantillas. Solo crea una tabla nueva.
       if (from < 3) {
         await migrator.createTable(formTemplateVersions);
+      }
+      // v3 → v4 (Paso 22): adjuntos de visita y MIME de cada subida. Aditiva:
+      // las entradas ya encoladas (fotos JPEG) toman el valor por defecto.
+      if (from < 4) {
+        await migrator.createTable(visitAttachments);
+        await migrator.addColumn(attachmentQueue, attachmentQueue.mime);
       }
     },
   );
@@ -105,6 +113,35 @@ class AppDatabase extends _$AppDatabase {
     return transaction(() async {
       await into(visits).insertOnConflictUpdate(visit);
       await into(outboxOps).insertOnConflictUpdate(outboxOp);
+    });
+  }
+
+  /// Guarda una visita capturada **entera** en una sola transacción (Paso 22,
+  /// tarea 5): la fila de la visita, sus adjuntos, las operaciones de outbox
+  /// (la de la visita primero; ver `SyncEngine.drainOutbox` sobre el orden) y
+  /// las entradas de la cola de subida. Si algo falla, no queda nada a medias:
+  /// ni una visita sin sus fotos ni una foto encolada sin visita.
+  ///
+  /// La cola de subida usa `insertOrIgnore`: si ese mismo contenido ya estaba
+  /// encolado o subido (otra visita con la misma foto), no se reinicia su
+  /// estado ni se sube dos veces.
+  Future<void> saveVisitCapture({
+    required VisitsCompanion visit,
+    required List<VisitAttachmentsCompanion> attachments,
+    required List<OutboxOpsCompanion> outboxOps,
+    required List<AttachmentQueueCompanion> uploads,
+  }) {
+    return transaction(() async {
+      await into(visits).insert(visit);
+      for (final attachment in attachments) {
+        await into(visitAttachments).insert(attachment);
+      }
+      for (final op in outboxOps) {
+        await into(this.outboxOps).insert(op);
+      }
+      for (final upload in uploads) {
+        await into(attachmentQueue).insert(upload, mode: InsertMode.insertOrIgnore);
+      }
     });
   }
 }

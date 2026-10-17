@@ -80,7 +80,7 @@ class AttachmentUploadService {
     final presignResult = await transport.presign(
       sha256: row.sha256,
       size: bytes.length,
-      mime: 'image/jpeg',
+      mime: row.mime,
     );
 
     return presignResult.when(
@@ -103,7 +103,7 @@ class AttachmentUploadService {
         final commitResult = await transport.commit(
           sha256: row.sha256,
           size: bytes.length,
-          mime: 'image/jpeg',
+          mime: row.mime,
         );
         return commitResult.isOk ? _markUploaded(row.sha256) : _markFailed(row.sha256);
       },

@@ -8,6 +8,12 @@ import 'package:flutter/material.dart';
 /// contrastes ya calculados para texto (WCAG AA).
 abstract final class AppPalette {
   static const Color brandSeed = Color(0xFF2E7D32);
+
+  /// Firma: tinta y papel fijos, **no** del tema. La firma se exporta como
+  /// PNG y se ve después en el back-office y en informes; con el tema oscuro
+  /// saldría una firma clara sobre fondo oscuro, ilegible en papel.
+  static const Color signatureInk = Color(0xFF111111);
+  static const Color signaturePaper = Color(0xFFFFFFFF);
 }
 
 /// Colores de estado del dominio (sync, conflictos) que el `ColorScheme` de

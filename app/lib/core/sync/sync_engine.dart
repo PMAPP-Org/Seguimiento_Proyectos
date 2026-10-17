@@ -128,7 +128,15 @@ class SyncEngine {
     final pendingRows =
         await (db.select(db.outboxOps)
               ..where((t) => t.state.equals(_statePending))
-              ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+              // `createdAt` se guarda con precisión de segundos: una visita y
+              // sus adjuntos, encolados en la misma transacción, empatan. El
+              // `rowid` (orden de inserción) desempata, y es lo que garantiza
+              // que la visita viaja antes que sus adjuntos — el servidor
+              // rechaza un adjunto cuya visita todavía no existe (Paso 22).
+              ..orderBy([
+                (t) => OrderingTerm.asc(t.createdAt),
+                (t) => OrderingTerm.asc(const CustomExpression<int>('rowid')),
+              ]))
             .get();
 
     final due = pendingRows.where((row) {
@@ -195,8 +203,17 @@ class SyncEngine {
         // `server_row` y el OutboxOp se borra, sin "merge de 3 vías"
         // (ADR-003, decisión explícita).
         if (outcome.status == 'applied' || outcome.status == 'conflict') {
-          if (outcome.serverRow != null) {
-            await _upsertVisitFromServerRow(outcome.serverRow!);
+          if (outcome.serverRow != null && !await _applyServerRecord(outcome.serverRow!)) {
+            // `server_row` que no se puede interpretar: no se aplica a medias
+            // ni se pierde la op en silencio (RD-02/RD-03).
+            await (db.update(db.outboxOps)..where((t) => t.opUuid.equals(row.opUuid))).write(
+              const OutboxOpsCompanion(
+                state: Value(_stateQuarantine),
+                errorMessage: Value('Respuesta del servidor no reconocida.'),
+              ),
+            );
+            quarantined++;
+            continue;
           }
           await (db.delete(db.outboxOps)..where((t) => t.opUuid.equals(row.opUuid))).go();
           if (outcome.status == 'applied') {
@@ -266,9 +283,62 @@ class SyncEngine {
         .write(const OutboxOpsCompanion(state: Value(_statePending)));
   }
 
-  /// `server_row` (`VisitRecord.data`, contrato Paso 8/9) tiene las mismas
-  /// claves en snake_case que `VisitsCompanion` — la traducción vive aquí
-  /// porque solo el push/pull de `visit` la necesita.
+  /// `server_row` del push es un `EntityRecord` del contrato:
+  /// `{"entity": "visit" | "visit_attachment", "data": {...}}`. Devuelve
+  /// `false` si no tiene esa forma o sus datos no son los del contrato.
+  ///
+  /// (Hasta el Paso 22 se leía `server_row` como si fuera directamente el
+  /// `data` de la visita, y los tests usaban esa misma forma equivocada: un
+  /// `conflict` real del servidor hacía saltar un `TypeError` dentro de la
+  /// transacción y la op quedaba atascada en `inflight`.)
+  Future<bool> _applyServerRecord(Map<String, dynamic> record) async {
+    final data = record['data'];
+    if (data is! Map<String, dynamic>) return false;
+    try {
+      switch (record['entity']) {
+        case 'visit':
+          await _upsertVisitFromServerRow(data);
+        case 'visit_attachment':
+          await _upsertAttachmentFromServerRow(data);
+        default:
+          return false;
+      }
+    } on TypeError {
+      // Un campo ausente o de otro tipo: el cast falla antes de escribir.
+      return false;
+    }
+    return true;
+  }
+
+  /// Contrato `VisitAttachment` → fila local. Un adjunto con `deleted_at` se
+  /// quita de la tabla local.
+  Future<void> _upsertAttachmentFromServerRow(Map<String, dynamic> row) async {
+    final id = row['id'] as String;
+    if (row['deleted_at'] != null) {
+      await (db.delete(db.visitAttachments)..where((t) => t.id.equals(id))).go();
+      return;
+    }
+    await db
+        .into(db.visitAttachments)
+        .insertOnConflictUpdate(
+          VisitAttachmentsCompanion.insert(
+            id: id,
+            orgId: row['org_id'] as String,
+            visitId: row['visit_id'] as String,
+            sha256: row['sha256'] as String,
+            role: row['role'] as String,
+            caption: Value(row['caption'] as String?),
+            capturedAt: DateTime.parse(row['captured_at'] as String),
+            position: row['order'] as int,
+            version: Value(row['version'] as int),
+            changeSeq: Value(row['change_seq'] as int?),
+          ),
+        );
+  }
+
+  /// `VisitRecord.data` (contrato Paso 8/9) tiene las mismas claves en
+  /// snake_case que `VisitsCompanion` — la traducción vive aquí porque solo
+  /// el push/pull de `visit` la necesita.
   Future<void> _upsertVisitFromServerRow(Map<String, dynamic> serverRow) async {
     final companion = VisitsCompanion.insert(
       id: serverRow['id'] as String,
@@ -318,13 +388,17 @@ class SyncEngine {
             // Una fila que no cumple el contrato se ignora sin bloquear el
             // resto del pull (`FormTemplateRepository.upsertFromServerRow`).
             await templates.upsertFromServerRow(row.data);
+          case 'visit_attachment':
+            await _applyServerRecord({'entity': row.entity, 'data': row.data});
         }
-        // `visit_attachment` / `assignment`: sin tabla local todavía.
+        // `assignment`: sin tabla local todavía.
       }
       for (final tombstone in response.tombstones) {
         switch (tombstone.entity) {
           case 'visit':
             await (db.delete(db.visits)..where((t) => t.id.equals(tombstone.id))).go();
+          case 'visit_attachment':
+            await (db.delete(db.visitAttachments)..where((t) => t.id.equals(tombstone.id))).go();
           case 'form_template_version':
             await templates.markDeleted(tombstone.id, tombstone.deletedAt);
         }
@@ -344,6 +418,9 @@ class SyncEngine {
           }
           for (final templateJson in bootstrap.formTemplateVersions) {
             await templates.upsertFromServerRow(templateJson);
+          }
+          for (final attachmentJson in bootstrap.visitAttachments) {
+            await _applyServerRecord({'entity': 'visit_attachment', 'data': attachmentJson});
           }
           await db.writeCursor(bootstrap.cursor, now: _now());
         });

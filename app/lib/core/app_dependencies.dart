@@ -19,10 +19,13 @@ import 'attachments/attachment_upload_service.dart';
 import 'auth/auth_controller.dart';
 import 'auth/token_store.dart';
 import 'capture/photo_capture.dart';
+import 'capture/signature_store.dart';
+import 'capture/visit_capture.dart';
 import 'constants.dart';
 import 'device/device_id_store.dart';
 import 'location/location_source.dart';
 import 'sync/sync_engine.dart';
+import '../data/capture/file_signature_store.dart';
 import '../data/capture/image_picker_photo_capture.dart';
 import '../data/http/api_client.dart';
 import '../data/http/attachment_api_client.dart';
@@ -31,6 +34,7 @@ import '../data/http/sync_api_client.dart';
 import '../data/local/database.dart';
 import '../data/local/encryption_key_store.dart';
 import '../data/local/form_template_repository.dart';
+import '../data/local/visit_status_repository.dart';
 import '../data/location/geolocator_location_source.dart';
 
 class AppDependencies {
@@ -43,8 +47,12 @@ class AppDependencies {
     PhotoCapture? photoCapture,
     SyncEngine? syncEngine,
     AttachmentUploadService? attachmentUploadService,
+    SignatureStore? signatureStore,
+    VisitCapture? visitCapture,
   }) : locationSource = locationSource ?? const GeolocatorLocationSource(),
        photoCapture = photoCapture ?? ImagePickerPhotoCapture(),
+       signatureStore = signatureStore ?? const FileSignatureStore(),
+       visitCapture = visitCapture ?? VisitCapture(db: database),
        syncEngine =
            syncEngine ??
            SyncEngine(
@@ -70,6 +78,13 @@ class AppDependencies {
   final PhotoCapture photoCapture;
   final SyncEngine syncEngine;
   final AttachmentUploadService attachmentUploadService;
+
+  /// Paso 22: dónde se guardan las firmas y el guardado de una visita.
+  final SignatureStore signatureStore;
+  final VisitCapture visitCapture;
+
+  /// Estado de sincronización de las visitas, para la pantalla de inicio.
+  VisitStatusRepository get visitStatus => VisitStatusRepository(database);
 
   /// Caché de plantillas (Paso 21): **la misma** instancia que alimenta el
   /// pull, para que las pantallas vean su invalidación.

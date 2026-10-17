@@ -37,4 +37,8 @@ abstract final class AppSizes {
   /// Ancho máximo del contenido en tabletas: un formulario de 1200 dp de
   /// ancho se lee peor que uno centrado.
   static const double maxContentWidth = 560;
+
+  /// Lienzo de firma: alto en pantalla y grosor del trazo.
+  static const double signatureHeight = 240;
+  static const double signatureStroke = 3;
 }
