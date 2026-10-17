@@ -86,7 +86,7 @@ services:
     # Activación en el Paso 19: análoga a `api` (build del mismo Dockerfile de
     # `server/`, pero con `command` apuntando al entrypoint del worker en vez
     # del servidor HTTP).
-    image: python:3.12-slim
+    image: python:3.14-slim
     restart: unless-stopped
     command: ["sh", "-c", "echo 'worker: placeholder sin codigo (activar en Paso 19, ver infra/docker-compose.yml)'; sleep infinity"]
     environment:
