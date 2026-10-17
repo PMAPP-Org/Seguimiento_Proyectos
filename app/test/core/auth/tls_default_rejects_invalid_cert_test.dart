@@ -1,7 +1,7 @@
 // Verificación explícita del Paso 13 (tarea 2, RD-01/ADR-009): "simular un
 // certificado inválido en el cliente HTTP de pruebas → la conexión se
 // rechaza (no hay bypass)". Levanta un servidor HTTPS real en loopback con
-// un certificado autofirmado (fixtures/self_signed_{cert,key}.pem) y conecta
+// un certificado autofirmado efímero (ver `_generateSelfSignedCert`) y conecta
 // con el `Dio` **sin ningún override** del hook de aceptación de
 // certificados inválidos de `HttpClientAdapter` (nombre omitido a
 // propósito: el lint RD-01 de Paso 3, `infra/scripts/lint_no_tls_bypass.sh`,
@@ -20,11 +20,35 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+/// Genera un par certificado/llave autofirmado en un directorio temporal.
+///
+/// Antes eran fixtures `.pem` en `test/core/auth/fixtures/`, pero `.gitignore`
+/// excluye `*.pem` y nunca llegaron al repositorio: el test solo pasaba en la
+/// máquina donde se crearon. Tampoco se versionan a propósito: una llave
+/// privada en un repo público dispara los escáneres de secretos y nadie puede
+/// distinguirla de una real. `openssl` existe en los runners de CI y en Git
+/// for Windows; si falta, el test **falla** (nunca se salta: es la prueba de
+/// RD-01).
+Future<({String cert, String key})> _generateSelfSignedCert(Directory dir) async {
+  final cert = p.join(dir.path, 'cert.pem');
+  final key = p.join(dir.path, 'key.pem');
+  final result = await Process.run('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes', //
+    '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost',
+  ]);
+  if (result.exitCode != 0) {
+    throw StateError('openssl no pudo generar el certificado de prueba: ${result.stderr}');
+  }
+  return (cert: cert, key: key);
+}
+
 Future<HttpServer> _startSelfSignedServer() async {
-  final fixturesDir = p.join(Directory.current.path, 'test', 'core', 'auth', 'fixtures');
+  final dir = await Directory.systemTemp.createTemp('visitacampo_tls_');
+  addTearDown(() => dir.delete(recursive: true));
+  final pem = await _generateSelfSignedCert(dir);
   final context = SecurityContext(withTrustedRoots: false)
-    ..useCertificateChain(p.join(fixturesDir, 'self_signed_cert.pem'))
-    ..usePrivateKey(p.join(fixturesDir, 'self_signed_key.pem'));
+    ..useCertificateChain(pem.cert)
+    ..usePrivateKey(pem.key);
 
   final server = await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, context);
   unawaited(
