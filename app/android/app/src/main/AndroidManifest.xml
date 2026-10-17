@@ -1,11 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INTERNET solo lo declaraban los manifests de debug/profile que genera
+         flutter create: un APK release no podía hablar con el backend. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Datos de campo (visitas, GPS, fotos, tokens) no salen del dispositivo
+         por backup en la nube ni por transferencia entre dispositivos
+         (allowBackup cubre Android ≤ 11; dataExtractionRules, 12+). La BD
+         local va cifrada igualmente (ADR-002), pero una copia sin su clave
+         del Keystore solo sería un riesgo sin utilidad. Tráfico en claro
+         prohibido explícitamente (RD-01): ya es el valor por defecto desde
+         targetSdk 28, y así no depende de ello. ISO 27001 A.8.12. -->
     <application
         android:label="visitacampo"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
