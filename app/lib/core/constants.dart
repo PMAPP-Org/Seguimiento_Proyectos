@@ -5,7 +5,7 @@
 // criterio de éxito del demo y añadir el paquete solo para esto sería
 // sobre-construcción (YAGNI). El valor lo actualiza release-please en cada
 // release, junto con `pubspec.yaml` (ver `release-please-config.json`).
-const String kAppVersion = '0.1.0'; // x-release-please-version
+const String kAppVersion = '0.2.0'; // x-release-please-version
 
 /// URL base de la API, configurable en tiempo de build/ejecución con
 /// `flutter run --dart-define=VISITACAMPO_API_BASE_URL=https://tu-dominio`.
