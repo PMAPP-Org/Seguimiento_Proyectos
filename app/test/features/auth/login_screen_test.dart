@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:visitacampo/core/app_dependencies.dart';
 import 'package:visitacampo/core/auth/auth_controller.dart';
 import 'package:visitacampo/core/auth/auth_models.dart';
@@ -18,6 +19,8 @@ import 'package:visitacampo/features/home/home_screen.dart';
 
 import '../../core/auth/fake_auth_transport.dart';
 import '../../core/auth/fake_token_store.dart';
+
+import '../../support/test_app.dart';
 
 TokenPair _tokenPair() => TokenPair(
   accessToken: 'access-1',
@@ -53,7 +56,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: const MaterialApp(home: LoginScreen()),
+        child: testApp(const LoginScreen()),
       ),
     );
 
@@ -73,7 +76,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: const MaterialApp(home: LoginScreen()),
+        child: testApp(const LoginScreen()),
       ),
     );
 

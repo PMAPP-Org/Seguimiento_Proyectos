@@ -21,6 +21,9 @@ import '../../core/location/location_source.dart';
 import '../../core/providers.dart';
 import '../../data/local/attachment_queue_repository.dart';
 import '../../data/local/database.dart';
+import '../../l10n/l10n.dart';
+import '../../ui/widgets/app_button.dart';
+import '../../ui/widgets/app_page_body.dart';
 
 class CaptureScreen extends ConsumerStatefulWidget {
   const CaptureScreen({super.key});
@@ -134,65 +137,63 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 
     if (!mounted) return;
     setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Visita guardada.')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.captureSaved)));
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final fix = _fix;
+    final photo = _photo;
     return Scaffold(
-      appBar: AppBar(title: const Text('Nueva visita')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const Key('capture_template_field'),
-              controller: _templateController,
-              decoration: const InputDecoration(labelText: 'ID de plantilla (UUID)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('capture_altura_field'),
-              controller: _alturaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Altura (cm)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('capture_notas_field'),
-              controller: _notasController,
-              decoration: const InputDecoration(labelText: 'Notas'),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              key: const Key('capture_get_location_button'),
-              onPressed: _getLocation,
-              child: const Text('Obtener ubicación'),
-            ),
-            if (_fix != null) Text('lat: ${_fix!.lat}, lon: ${_fix!.lon}'),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              key: const Key('capture_take_photo_button'),
-              onPressed: _takePhoto,
-              child: const Text('Tomar foto'),
-            ),
-            if (_photo != null) Text('Foto: ${_photo!.file.path.split('/').last}'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              key: const Key('capture_save_button'),
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Guardar visita'),
-            ),
-          ],
-        ),
+      appBar: AppBar(title: Text(l10n.captureTitle)),
+      body: AppPageBody(
+        children: [
+          TextField(
+            key: const Key('capture_template_field'),
+            controller: _templateController,
+            decoration: InputDecoration(labelText: l10n.captureTemplateLabel),
+            autocorrect: false,
+          ),
+          const AppGap.sm(),
+          TextField(
+            key: const Key('capture_altura_field'),
+            controller: _alturaController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: l10n.captureHeightLabel),
+          ),
+          const AppGap.sm(),
+          TextField(
+            key: const Key('capture_notas_field'),
+            controller: _notasController,
+            decoration: InputDecoration(labelText: l10n.captureNotesLabel),
+            minLines: 1,
+            maxLines: 4,
+          ),
+          const AppGap.lg(),
+          AppButton(
+            key: const Key('capture_get_location_button'),
+            label: l10n.captureGetLocation,
+            onPressed: _getLocation,
+          ),
+          if (fix != null) Text(l10n.captureLocation('${fix.lat}', '${fix.lon}')),
+          const AppGap.sm(),
+          AppButton(
+            key: const Key('capture_take_photo_button'),
+            label: l10n.captureTakePhoto,
+            onPressed: _takePhoto,
+          ),
+          if (photo != null) Text(l10n.capturePhoto(photo.file.path.split('/').last)),
+          const AppGap.lg(),
+          AppButton(
+            key: const Key('capture_save_button'),
+            label: l10n.captureSave,
+            loadingLabel: l10n.captureSaving,
+            isLoading: _isSaving,
+            onPressed: _save,
+          ),
+        ],
       ),
     );
   }

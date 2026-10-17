@@ -19,6 +19,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:visitacampo/core/app_dependencies.dart';
 import 'package:visitacampo/core/auth/auth_controller.dart';
 import 'package:visitacampo/core/auth/auth_models.dart';
@@ -31,6 +32,8 @@ import 'package:visitacampo/features/capture/capture_screen.dart';
 
 import '../../core/auth/fake_auth_transport.dart';
 import '../../core/auth/fake_token_store.dart';
+
+import '../../support/test_app.dart';
 
 class _FakeLocationSource implements LocationSource {
   const _FakeLocationSource(this.fix);
@@ -108,7 +111,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: const MaterialApp(home: CaptureScreen()),
+        child: testApp(const CaptureScreen()),
       ),
     );
 
@@ -152,7 +155,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDependenciesProvider.overrideWithValue(dependencies)],
-        child: const MaterialApp(home: CaptureScreen()),
+        child: testApp(const CaptureScreen()),
       ),
     );
 

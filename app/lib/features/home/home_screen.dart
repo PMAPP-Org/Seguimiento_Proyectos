@@ -9,6 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/sync/result.dart';
+import '../../l10n/l10n.dart';
+import '../../ui/widgets/app_button.dart';
+import '../../ui/widgets/app_page_body.dart';
 import '../capture/capture_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -44,14 +47,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           attachmentReport.failed > 0 ||
           !pullResult.isOk;
 
+      final l10n = context.l10n;
       final message = hasIssues
-          ? 'Sincronización incompleta: ${drainReport.applied} visita(s) aplicadas, '
-                '${drainReport.quarantined} rechazada(s), ${drainReport.deferred} pendiente(s) de '
-                'reintento, ${attachmentReport.uploaded} adjunto(s) subido(s), '
-                '${attachmentReport.failed} adjunto(s) fallido(s)'
-                '${pullResult.isOk ? '' : ', no se pudieron traer los cambios del servidor'}.'
-          : 'Sincronización completa: ${drainReport.applied} visita(s) aplicadas, '
-                '${attachmentReport.uploaded} adjunto(s) subido(s).';
+          ? [
+              l10n.syncIncomplete(
+                drainReport.applied,
+                drainReport.quarantined,
+                drainReport.deferred,
+                attachmentReport.uploaded,
+                attachmentReport.failed,
+              ),
+              if (!pullResult.isOk) l10n.syncPullFailed,
+            ].join(' ')
+          : l10n.syncComplete(drainReport.applied, attachmentReport.uploaded);
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } finally {
@@ -64,37 +72,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final dependencies = ref.watch(appDependenciesProvider);
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('VisitaCampo')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Sesión iniciada. Device: ${dependencies.deviceId}'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              key: const Key('home_new_visit_button'),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const CaptureScreen()),
-                );
-              },
-              child: const Text('Nueva visita'),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              key: const Key('home_sync_button'),
-              onPressed: _isSyncing ? null : _sync,
-              child: _isSyncing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Sincronizar'),
-            ),
-          ],
-        ),
+      appBar: AppBar(title: Text(l10n.appTitle)),
+      body: AppPageBody(
+        centerVertically: true,
+        children: [
+          Text(l10n.homeSessionStarted(dependencies.deviceId), textAlign: TextAlign.center),
+          const AppGap.lg(),
+          AppButton(
+            key: const Key('home_new_visit_button'),
+            label: l10n.homeNewVisit,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const CaptureScreen()),
+              );
+            },
+          ),
+          const AppGap.sm(),
+          AppButton(
+            key: const Key('home_sync_button'),
+            label: l10n.homeSync,
+            loadingLabel: l10n.homeSyncing,
+            isLoading: _isSyncing,
+            onPressed: _sync,
+          ),
+        ],
       ),
     );
   }

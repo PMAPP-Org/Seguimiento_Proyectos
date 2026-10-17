@@ -1,0 +1,65 @@
+{
+  "@@locale": "es",
+
+  "appTitle": "VisitaCampo",
+  "@appTitle": { "description": "Nombre de la app en la barra superior y en el sistema." },
+
+  "loginTitle": "Iniciar sesión",
+  "loginUsernameLabel": "Usuario",
+  "loginPasswordLabel": "Contraseña",
+  "loginSubmit": "Entrar",
+  "loginSubmitting": "Iniciando sesión…",
+  "@loginSubmitting": { "description": "Lector de pantalla mientras se envía el login." },
+
+  "authErrorNetwork": "No se pudo conectar con el servidor.",
+  "authErrorInvalidCredentials": "Usuario o contraseña incorrectos.",
+  "authErrorUnauthorized": "Sesión no autorizada.",
+  "authErrorUnexpectedStatus": "Error inesperado del servidor ({statusCode}).",
+  "@authErrorUnexpectedStatus": {
+    "placeholders": { "statusCode": { "type": "int" } }
+  },
+  "authErrorMalformedResponse": "Respuesta del servidor no reconocida.",
+
+  "homeSessionStarted": "Sesión iniciada. Dispositivo: {deviceId}",
+  "@homeSessionStarted": {
+    "placeholders": { "deviceId": { "type": "String" } }
+  },
+  "homeNewVisit": "Nueva visita",
+  "homeSync": "Sincronizar",
+  "homeSyncing": "Sincronizando…",
+
+  "syncComplete": "Sincronización completa: {applied, plural, =1{1 visita aplicada} other{{applied} visitas aplicadas}}, {uploaded, plural, =1{1 adjunto subido} other{{uploaded} adjuntos subidos}}.",
+  "@syncComplete": {
+    "placeholders": { "applied": { "type": "int" }, "uploaded": { "type": "int" } }
+  },
+  "syncIncomplete": "Sincronización incompleta: {applied, plural, =1{1 visita aplicada} other{{applied} visitas aplicadas}}, {quarantined, plural, =1{1 rechazada} other{{quarantined} rechazadas}}, {deferred, plural, =1{1 pendiente de reintento} other{{deferred} pendientes de reintento}}, {uploaded, plural, =1{1 adjunto subido} other{{uploaded} adjuntos subidos}}, {failedAttachments, plural, =1{1 adjunto fallido} other{{failedAttachments} adjuntos fallidos}}.",
+  "@syncIncomplete": {
+    "placeholders": {
+      "applied": { "type": "int" },
+      "quarantined": { "type": "int" },
+      "deferred": { "type": "int" },
+      "uploaded": { "type": "int" },
+      "failedAttachments": { "type": "int" }
+    }
+  },
+  "syncPullFailed": "No se pudieron traer los cambios del servidor.",
+
+  "captureTitle": "Nueva visita",
+  "captureTemplateLabel": "ID de plantilla (UUID)",
+  "captureHeightLabel": "Altura (cm)",
+  "captureNotesLabel": "Notas",
+  "captureGetLocation": "Obtener ubicación",
+  "captureLocation": "lat: {lat}, lon: {lon}",
+  "@captureLocation": {
+    "description": "Coordenadas en formato técnico (punto decimal), no localizado: se copian a SIG.",
+    "placeholders": { "lat": { "type": "String" }, "lon": { "type": "String" } }
+  },
+  "captureTakePhoto": "Tomar foto",
+  "capturePhoto": "Foto: {fileName}",
+  "@capturePhoto": {
+    "placeholders": { "fileName": { "type": "String" } }
+  },
+  "captureSave": "Guardar visita",
+  "captureSaving": "Guardando visita…",
+  "captureSaved": "Visita guardada."
+}
