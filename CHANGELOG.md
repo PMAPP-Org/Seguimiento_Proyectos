@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/), v
 
 Cada release la genera automáticamente [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release.yml`) a partir de los mensajes de commit en `master`, que siguen [Conventional Commits](https://www.conventionalcommits.org/es/v1.0.0/). No se edita a mano: lo que deba aparecer aquí se describe en el título del PR (`feat: …`, `fix: …`), que con *Squash and merge* es el mensaje del commit.
 
+## [0.3.0](https://github.com/PMAPP-Org/Seguimiento_Proyectos/compare/v0.2.0...v0.3.0) (2026-10-17)
+
+
+### Agregado
+
+* offline visit capture with photos and signature (Paso 22) ([#21](https://github.com/PMAPP-Org/Seguimiento_Proyectos/issues/21)) ([1febfda](https://github.com/PMAPP-Org/Seguimiento_Proyectos/commit/1febfdaaa1ac6663fb81bad3f5c1b589d8757240))
+
 ## [0.2.0](https://github.com/PMAPP-Org/Seguimiento_Proyectos/compare/v0.1.0...v0.2.0) (2026-10-17)
 
 
